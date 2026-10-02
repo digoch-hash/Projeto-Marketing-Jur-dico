@@ -11,6 +11,7 @@ class Settings:
     draft_model: str
     lookback_days: int
     user_agent: str
+    data_dir: str
 
 
 def load_settings() -> Settings:
@@ -21,6 +22,7 @@ def load_settings() -> Settings:
         anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5"),
         draft_model=os.getenv("ANTHROPIC_DRAFT_MODEL", "claude-opus-5-5"),
         lookback_days=int(os.getenv("COLLECT_LOOKBACK_DAYS", "7")),
+        data_dir=os.getenv("DATA_DIR", "data"),
         user_agent=os.getenv(
             "COLLECTOR_USER_AGENT",
             "Mozilla/5.0 (compatible; HRBioMonitor/0.1; +monitoramento de normas ambientais)",

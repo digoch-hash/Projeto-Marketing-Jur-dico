@@ -96,6 +96,31 @@
     </section>
   </form>
 
+    <section class="card" id="artes">
+      <h3 class="sec">Artes para postar</h3>
+      {% if art_files %}
+      <div class="art-grid">
+        {% for f in art_files %}<a href="/items/{{ item.id }}/art/{{ f }}" download="{{ f }}"><img src="/items/{{ item.id }}/art/{{ f }}" alt="Arte {{ f }}" loading="lazy"></a>{% endfor %}
+      </div>
+      <p><a class="btn small" href="/items/{{ item.id }}/art.zip">Baixar todas (.zip)</a></p>
+      <p class="status-line">Toque numa arte para baixar. O carrossel vai no feed (slide_01 a slide_NN) e a imagem "story" serve para o Status do WhatsApp e os stories.</p>
+      {% else %}
+      <p class="status-line">Salve as edições do texto e depois gere as artes. Elas usam o texto dos slides acima.</p>
+      {% endif %}
+      <form method="post" action="/items/{{ item.id }}/draft/art">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="lbl" for="photo">Foto de fundo</label>
+        <select id="photo" class="fld" name="photo">
+          <option value="auto">Automática (gira entre as suas fotos)</option>
+          {% for p in photos %}<option value="{{ p }}" {{ 'selected' if draft.photo == p else '' }}>Foto {{ loop.index }}</option>{% endfor %}
+        </select>
+        <button class="btn primary" type="submit" style="width:100%;margin-top:8px">{{ 'Gerar as artes de novo' if art_files else 'Gerar artes' }}</button>
+      </form>
+      {% if not photos %}<p class="status-line">Você ainda não enviou fotos: as artes usam um fundo verde. <a href="/marca">Enviar fotos de campo</a></p>{% endif %}
+      {% if not has_logo %}<p class="status-line">Sem o arquivo do logo, aparece só o nome "HRBio Ambiental". <a href="/marca">Enviar logo</a></p>{% endif %}
+    </section>
+
+
   <section class="card">
     {% if draft.status == DRAFT_READY %}
       <form method="post" action="/items/{{ item.id }}/draft/approve">

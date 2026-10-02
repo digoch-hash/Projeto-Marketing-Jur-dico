@@ -6,7 +6,8 @@ lugar), separar o que importa para os clientes da HRBio e decidir o que vira pos
 **Fase 1:** coletar → filtrar por relevância → lista de novidades no celular.
 **Fase 2:** ao marcar "Quero postar", o sistema gera o rascunho do conteúdo para você revisar e aprovar.
 **Fase 3:** calendário editorial com ritmo de um post dia sim, dia não.
-Artes, publicação no Instagram e métricas entram nas próximas fases.
+**Fase 4:** artes prontas para postar (carrossel e story/Status) no estilo da HRBio.
+Publicação no Instagram e métricas entram nas próximas fases.
 
 ## O que já funciona
 
@@ -52,6 +53,25 @@ O caminho de cada norma: **nova → rascunho → aprovado → agendado → publi
 - "Hoje" é sempre a data de Brasília, mesmo com o servidor em UTC.
 - Bancos criados em fases anteriores ganham as colunas novas sozinhos ao iniciar (migração leve, sem perda de dados).
 
+## Artes (fase 4)
+
+No rascunho, o botão **Gerar artes** cria, em poucos segundos:
+
+- o **carrossel** (1080×1350, formato 4:5 do feed): um slide por item do rascunho, com contador e "arraste";
+- uma imagem **story** (1080×1920) com o gancho e o texto do Status do WhatsApp, para Status e stories.
+
+O visual segue os stories da marca: foto escurecida, título grande em Montserrat extranegrito com a última
+linha em verde-limão, traço vertical fino e painel verde-escuro arredondado. O texto sempre cabe na arte
+(a fonte diminui sozinha e, no limite, corta com "…"). Toque numa arte para baixar, ou baixe tudo em `.zip`.
+
+A tela **Marca** (link no rodapé) recebe o **logo** (PNG, de preferência com fundo transparente) e as **fotos de
+campo** da HRBio (JPG, PNG ou WEBP, até 25 MB cada). A foto de fundo é automática (gira entre as suas fotos) ou
+escolhida por rascunho. Sem fotos, as artes usam um fundo verde; sem logo, aparece o nome "HRBio Ambiental".
+Editar o texto do rascunho apaga as artes antigas, para nunca sair arte desatualizada.
+
+Arquivos enviados e artes ficam em `DATA_DIR` (padrão `data/`), fora do banco e fora do Git.
+A fonte Montserrat (licença SIL OFL, em `app/art/fonts/OFL.txt`) vai junto no repositório.
+
 ## Rodar localmente
 
 ```bash
@@ -93,6 +113,6 @@ SQLite por padrão (`data/app.db`). Para PostgreSQL, defina `DATABASE_URL`
 ## Próximas fases
 
 1. ~~Gerador de rascunhos~~ e ~~calendário editorial~~ (feitos).
-2. Artes com a identidade visual da HRBio (carrossel e story prontos para postar).
+2. ~~Artes com a identidade da HRBio~~ (feito).
 3. Publicação no Instagram só depois do seu OK, com métricas (alcance, compartilhamentos, salvamentos).
 4. Reels em vídeo, avisos por WhatsApp e demais fontes (DOU, ANM, IBAMA, ANA).

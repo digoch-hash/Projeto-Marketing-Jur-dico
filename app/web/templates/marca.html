@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Marca{% endblock %}
+{% block body %}
+<main>
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+  <h2 style="margin:6px 0 2px">Marca</h2>
+  <p class="status-line" style="margin-top:0">O logo e as fotos de campo usados nas artes dos posts.</p>
+
+  <section class="card">
+    <h3 class="sec">Logo</h3>
+    {% if has_logo %}
+      <div style="background:#f7f4e6;border-radius:12px;padding:12px;display:inline-block"><img src="/marca/logo" alt="Logo atual" style="max-width:240px;max-height:100px;display:block"></div>
+    {% else %}
+      <p class="status-line">Nenhum logo enviado: as artes mostram só o nome "HRBio Ambiental" em texto.</p>
+    {% endif %}
+    <form method="post" action="/marca/logo" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="lbl" for="logo">Enviar o logo (PNG com fundo transparente é o ideal)</label>
+      <input id="logo" class="fld" type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
+      <button class="btn primary" type="submit" style="width:100%;margin-top:8px">Enviar logo</button>
+    </form>
+    <p class="status-line">O logo aparece sobre uma plaquinha clara no canto da arte, então pode ser o de texto escuro.</p>
+  </section>
+
+  <section class="card">
+    <h3 class="sec">Fotos de campo ({{ photos|length }})</h3>
+    <form method="post" action="/marca/fotos" enctype="multipart/form-data">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="lbl" for="fotos">Escolha uma ou várias fotos (JPG, PNG ou WEBP)</label>
+      <input id="fotos" class="fld" type="file" name="fotos" accept="image/png,image/jpeg,image/webp" multiple required>
+      <button class="btn primary" type="submit" style="width:100%;margin-top:8px">Enviar fotos</button>
+    </form>
+    <div class="art-grid" style="margin-top:12px">
+      {% for p in photos %}
+      <div>
+        <img src="/marca/fotos/{{ p }}?thumb=1" alt="Foto {{ loop.index }}" loading="lazy">
+        <form method="post" action="/marca/fotos/{{ p }}/excluir" onsubmit="return confirm('Remover esta foto?')">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn small danger" type="submit" style="width:100%;margin-top:4px">Remover</button>
+        </form>
+      </div>
+      {% else %}<p class="status-line">Nenhuma foto ainda.</p>{% endfor %}
+    </div>
+    <p class="status-line">Fotos escuras ou com bastante textura de vegetação funcionam melhor: o texto da arte fica por cima.</p>
+  </section>
+</main>
+{% endblock %}

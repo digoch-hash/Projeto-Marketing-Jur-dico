@@ -8,6 +8,7 @@ import httpx
 from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import select
 
+from app.brand_assets import BrandAssets
 from app.config import Settings
 from app.fulltext import FullTextError, Material, fetch_material
 from app.models import (
@@ -195,6 +196,7 @@ def run_draft_job(session_factory, settings: Settings, item_id: int, claude_clie
             draft.status = DRAFT_READY
             draft.approved_at = None
             draft.scheduled_for = None  # texto novo precisa ser aprovado e agendado de novo
+            BrandAssets(settings.data_dir).clear_art(item_id)  # artes antigas ficaram desatualizadas
             draft.generations += 1
             draft.error = ""
         except (DraftError, FullTextError, httpx.HTTPError) as exc:

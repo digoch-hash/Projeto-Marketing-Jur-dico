@@ -5,13 +5,15 @@ import threading
 from datetime import date, datetime
 from pathlib import Path
 
-from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
 
+from app.art.render import render_set
+from app.brand_assets import AssetError, BrandAssets
 from app.collector import run_default
 from app.editorial import MIN_GAP_DAYS, build_agenda, conflicts, suggest_date, taken_dates, today_br
 from app.drafts import DraftContent, build_full_caption, run_draft_job, start_draft
@@ -55,6 +57,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
     templates.env.filters["brdate"] = lambda d: d.strftime("%d/%m/%Y") if d else "—"
 
     collect_lock = threading.Lock()
+    assets = BrandAssets(settings.data_dir)
 
     def get_db():
         db = session_factory()
@@ -207,6 +210,8 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             DRAFT_SCHEDULED=DRAFT_SCHEDULED, DRAFT_PUBLISHED=DRAFT_PUBLISHED,
             suggested=suggest_date(taken_dates(db, exclude_item_id=item_id), today_br()),
             today=today_br(),
+            art_files=assets.list_art(item_id), photos=assets.list_photos(),
+            has_logo=assets.logo_path.is_file(),
         )
 
     @app.post("/items/{item_id}/draft/generate")
@@ -257,6 +262,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         if draft.status in (DRAFT_APPROVED, DRAFT_SCHEDULED):  # editou depois de aprovar: aprovar e agendar de novo
             draft.status, draft.approved_at, draft.scheduled_for = DRAFT_READY, None, None
             flash += " A aprovação e o agendamento foram cancelados: aprove de novo."
+        assets.clear_art(item_id)  # as artes antigas nao refletem mais o texto editado
         draft.updated_at = utcnow()
         db.commit()
         request.session["flash"] = flash
@@ -282,6 +288,108 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             draft.status, draft.approved_at, draft.scheduled_for = DRAFT_READY, None, None
         db.commit()
         return RedirectResponse(f"/items/{item_id}/draft", status_code=303)
+
+    # -------------------------------------------------------------------- artes
+    @app.post("/items/{item_id}/draft/art")
+    def draft_art(
+        request: Request,
+        item_id: int,
+        photo: str = Form("auto"),
+        csrf: str = Form(""),
+        user: User = Depends(current_user),
+        db=Depends(get_db),
+    ):
+        check_csrf(request, csrf)
+        item, draft = load_draft_page(db, item_id)
+        if not draft or not draft.content:
+            raise HTTPException(400, "Gere o rascunho antes das artes")
+        content = DraftContent.model_validate_json(draft.content)
+        chosen = assets.pick_photo(item_id) if photo == "auto" else (photo if assets.photo_path(photo) else None)
+        draft.photo = None if photo == "auto" else chosen
+        images = render_set(
+            slides=[(sl.title, sl.body) for sl in content.carousel],
+            headline=content.headline,
+            status_text=content.whatsapp_status,
+            norm_label=item.title,
+            photo=assets.load_photo(chosen),
+            logo=assets.load_logo(),
+            seed=item_id,
+        )
+        assets.save_art(item_id, images)
+        db.commit()
+        request.session["flash"] = f"{len(images)} artes geradas."
+        return RedirectResponse(f"/items/{item_id}/draft#artes", status_code=303)
+
+    @app.get("/items/{item_id}/art/{name}")
+    def art_file(item_id: int, name: str, user: User = Depends(current_user)):
+        path = assets.art_path(item_id, name)
+        if not path:
+            raise HTTPException(404, "Arte não encontrada")
+        return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+    @app.get("/items/{item_id}/art.zip")
+    def art_zip(item_id: int, user: User = Depends(current_user)):
+        if not assets.list_art(item_id):
+            raise HTTPException(404, "Gere as artes primeiro")
+        return Response(
+            assets.art_zip(item_id), media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="artes-{item_id}.zip"'},
+        )
+
+    # --------------------------------------------------------------------- marca
+    @app.get("/marca")
+    def brand_page(request: Request, user: User = Depends(current_user)):
+        return render(request, "marca.html", user=user, photos=assets.list_photos(), has_logo=assets.logo_path.is_file())
+
+    @app.post("/marca/logo")
+    async def brand_logo(request: Request, user: User = Depends(current_user)):
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        upload = form.get("logo")
+        try:
+            if not hasattr(upload, "read"):
+                raise AssetError("Escolha um arquivo de logo.")
+            assets.save_logo(await upload.read())
+            request.session["flash"] = "Logo atualizado."
+        except AssetError as exc:
+            request.session["flash"] = str(exc)
+        return RedirectResponse("/marca", status_code=303)
+
+    @app.post("/marca/fotos")
+    async def brand_photos(request: Request, user: User = Depends(current_user)):
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        ok, errors = 0, []
+        for upload in form.getlist("fotos"):
+            if not hasattr(upload, "read") or not getattr(upload, "filename", ""):
+                continue
+            try:
+                assets.save_photo(await upload.read())
+                ok += 1
+            except AssetError as exc:
+                errors.append(f"{upload.filename}: {exc}")
+        request.session["flash"] = " ".join([f"{ok} foto(s) enviada(s)."] + errors)
+        return RedirectResponse("/marca", status_code=303)
+
+    @app.post("/marca/fotos/{name}/excluir")
+    def brand_photo_delete(request: Request, name: str, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, csrf)
+        assets.delete_photo(name)
+        request.session["flash"] = "Foto removida."
+        return RedirectResponse("/marca", status_code=303)
+
+    @app.get("/marca/fotos/{name}")
+    def brand_photo_file(name: str, thumb: int = 0, user: User = Depends(current_user)):
+        path = assets.photo_path(name, thumb=bool(thumb))
+        if not path:
+            raise HTTPException(404, "Foto não encontrada")
+        return FileResponse(path, media_type="image/jpeg")
+
+    @app.get("/marca/logo")
+    def brand_logo_file(user: User = Depends(current_user)):
+        if not assets.logo_path.is_file():
+            raise HTTPException(404, "Sem logo")
+        return FileResponse(assets.logo_path, media_type="image/png")
 
     # --------------------------------------------------------------- calendario
     @app.get("/calendario")

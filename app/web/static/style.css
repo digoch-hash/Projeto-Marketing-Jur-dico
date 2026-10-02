@@ -65,3 +65,5 @@ textarea.fld{resize:vertical;line-height:1.4}
 .ag.post{background:#f2f7e8;margin:0 -14px;padding-left:14px;padding-right:14px}
 .top nav .btn{min-height:34px;padding:4px 10px;font-size:.88rem}
 @media (max-width:430px){.top h1{font-size:.95rem}.top h1 span{display:none}}
+.art-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.art-grid img{width:100%;height:auto;border-radius:10px;border:1px solid var(--line);display:block}

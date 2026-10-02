@@ -92,3 +92,4 @@ class Draft(Base):
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     scheduled_for: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    photo: Mapped[str | None] = mapped_column(String(200), nullable=True)  # foto de fundo escolhida para as artes
