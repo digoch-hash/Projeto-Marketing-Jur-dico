@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import threading
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Form, HTTPException, Request
@@ -13,11 +13,12 @@ from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.collector import run_default
+from app.editorial import MIN_GAP_DAYS, build_agenda, conflicts, suggest_date, taken_dates, today_br
 from app.drafts import DraftContent, build_full_caption, run_draft_job, start_draft
 from app.config import Settings, load_settings
 from app.db import init_db, make_engine, make_session_factory
 from app.models import (
-    DRAFT_APPROVED, DRAFT_ERROR, DRAFT_GENERATING, DRAFT_READY, STATUSES, CollectRun, Draft, Item, User, utcnow,
+    DRAFT_APPROVED, DRAFT_ERROR, DRAFT_GENERATING, DRAFT_PUBLISHED, DRAFT_READY, DRAFT_SCHEDULED, STATUSES, CollectRun, Draft, Item, User, utcnow,
 )
 from app.relevance import THEMES
 from app.security import new_csrf_token, verify_password
@@ -203,6 +204,9 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             has_key=bool(settings.anthropic_api_key),
             DRAFT_GENERATING=DRAFT_GENERATING, DRAFT_READY=DRAFT_READY,
             DRAFT_APPROVED=DRAFT_APPROVED, DRAFT_ERROR=DRAFT_ERROR,
+            DRAFT_SCHEDULED=DRAFT_SCHEDULED, DRAFT_PUBLISHED=DRAFT_PUBLISHED,
+            suggested=suggest_date(taken_dates(db, exclude_item_id=item_id), today_br()),
+            today=today_br(),
         )
 
     @app.post("/items/{item_id}/draft/generate")
@@ -215,8 +219,10 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         db=Depends(get_db),
     ):
         check_csrf(request, csrf)
-        item, _ = load_draft_page(db, item_id)
-        if not settings.anthropic_api_key:
+        item, current = load_draft_page(db, item_id)
+        if current and current.status == DRAFT_PUBLISHED:
+            request.session["flash"] = "Este post já foi publicado; não dá para gerar de novo."
+        elif not settings.anthropic_api_key:
             request.session["flash"] = "Falta configurar ANTHROPIC_API_KEY no servidor para gerar rascunhos."
         elif start_draft(db, item):
             background.add_task(run_draft_job, session_factory, settings, item_id)
@@ -247,11 +253,13 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             scene.narration = str(form.get(f"scene_narration_{i}", scene.narration)).strip()
             scene.on_screen_text = str(form.get(f"scene_text_{i}", scene.on_screen_text)).strip()
         draft.content = content.model_dump_json()
-        if draft.status == DRAFT_APPROVED:  # editou depois de aprovar: precisa aprovar de novo
-            draft.status, draft.approved_at = DRAFT_READY, None
+        flash = "Alterações salvas."
+        if draft.status in (DRAFT_APPROVED, DRAFT_SCHEDULED):  # editou depois de aprovar: aprovar e agendar de novo
+            draft.status, draft.approved_at, draft.scheduled_for = DRAFT_READY, None, None
+            flash += " A aprovação e o agendamento foram cancelados: aprove de novo."
         draft.updated_at = utcnow()
         db.commit()
-        request.session["flash"] = "Alterações salvas."
+        request.session["flash"] = flash
         return RedirectResponse(f"/items/{item_id}/draft", status_code=303)
 
     @app.post("/items/{item_id}/draft/approve")
@@ -265,14 +273,118 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
     ):
         check_csrf(request, csrf)
         _, draft = load_draft_page(db, item_id)
-        if not draft or draft.status not in (DRAFT_READY, DRAFT_APPROVED):
+        if not draft or draft.status not in (DRAFT_READY, DRAFT_APPROVED, DRAFT_SCHEDULED):
             raise HTTPException(400, "Só dá para aprovar um rascunho pronto")
         if approve == "1":
-            draft.status, draft.approved_at = DRAFT_APPROVED, utcnow()
+            if draft.status == DRAFT_READY:
+                draft.status, draft.approved_at = DRAFT_APPROVED, utcnow()
         else:
-            draft.status, draft.approved_at = DRAFT_READY, None
+            draft.status, draft.approved_at, draft.scheduled_for = DRAFT_READY, None, None
         db.commit()
         return RedirectResponse(f"/items/{item_id}/draft", status_code=303)
+
+    # --------------------------------------------------------------- calendario
+    @app.get("/calendario")
+    def calendar_page(request: Request, user: User = Depends(current_user), db=Depends(get_db)):
+        today = today_br()
+        taken = taken_dates(db)
+        queue = db.execute(
+            select(Draft, Item).join(Item, Item.id == Draft.item_id)
+            .where(Draft.status == DRAFT_APPROVED).order_by(Draft.approved_at)
+        ).all()
+        published = db.execute(
+            select(Draft, Item).join(Item, Item.id == Draft.item_id)
+            .where(Draft.status == DRAFT_PUBLISHED).order_by(Draft.published_at.desc()).limit(10)
+        ).all()
+        overdue = db.execute(
+            select(Draft, Item).join(Item, Item.id == Draft.item_id)
+            .where(Draft.status == DRAFT_SCHEDULED, Draft.scheduled_for < today).order_by(Draft.scheduled_for)
+        ).all()
+        # cada item da fila recebe uma data sugerida diferente (a anterior passa a contar como ocupada)
+        suggestions, simulated = {}, set(taken)
+        for draft, _ in queue:
+            day = suggest_date(simulated, today)
+            suggestions[draft.item_id] = day
+            simulated.add(day)
+        return render(
+            request, "calendario.html", user=user, today=today, agenda=build_agenda(db, today),
+            queue=queue, published=published, overdue=overdue, suggestions=suggestions,
+        )
+
+    def _parse_day(value: str) -> date | None:
+        try:
+            return datetime.strptime(value.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            return None
+
+    @app.post("/items/{item_id}/draft/schedule")
+    def draft_schedule(
+        request: Request,
+        item_id: int,
+        day: str = Form(""),
+        next_url: str = Form(""),
+        csrf: str = Form(""),
+        user: User = Depends(current_user),
+        db=Depends(get_db),
+    ):
+        check_csrf(request, csrf)
+        _, draft = load_draft_page(db, item_id)
+        if not draft or draft.status not in (DRAFT_APPROVED, DRAFT_SCHEDULED):
+            raise HTTPException(400, "Aprove o rascunho antes de agendar")
+        today = today_br()
+        others = taken_dates(db, exclude_item_id=item_id)
+        chosen = _parse_day(day) if day.strip() else suggest_date(others, today)
+        if chosen is None:
+            request.session["flash"] = "Data inválida."
+        elif chosen < today:
+            request.session["flash"] = "Essa data já passou. Escolha hoje ou uma data futura."
+        else:
+            draft.status, draft.scheduled_for = DRAFT_SCHEDULED, chosen
+            db.commit()
+            msg = f"Agendado para {chosen.strftime('%d/%m/%Y')}."
+            if conflicts(chosen, others):
+                msg += f" Atenção: fica a menos de {MIN_GAP_DAYS} dias de outro post (fora do ritmo dia sim, dia não)."
+            request.session["flash"] = msg
+        target = next_url if next_url.startswith("/") and not next_url.startswith("//") else f"/items/{item_id}/draft"
+        return RedirectResponse(target, status_code=303)
+
+    @app.post("/items/{item_id}/draft/unschedule")
+    def draft_unschedule(
+        request: Request,
+        item_id: int,
+        next_url: str = Form(""),
+        csrf: str = Form(""),
+        user: User = Depends(current_user),
+        db=Depends(get_db),
+    ):
+        check_csrf(request, csrf)
+        _, draft = load_draft_page(db, item_id)
+        if not draft or draft.status != DRAFT_SCHEDULED:
+            raise HTTPException(400, "Este rascunho não está agendado")
+        draft.status, draft.scheduled_for = DRAFT_APPROVED, None
+        db.commit()
+        target = next_url if next_url.startswith("/") and not next_url.startswith("//") else f"/items/{item_id}/draft"
+        return RedirectResponse(target, status_code=303)
+
+    @app.post("/items/{item_id}/draft/published")
+    def draft_published(
+        request: Request,
+        item_id: int,
+        next_url: str = Form(""),
+        csrf: str = Form(""),
+        user: User = Depends(current_user),
+        db=Depends(get_db),
+    ):
+        check_csrf(request, csrf)
+        _, draft = load_draft_page(db, item_id)
+        if not draft or draft.status not in (DRAFT_APPROVED, DRAFT_SCHEDULED):
+            raise HTTPException(400, "Só dá para marcar como publicado um conteúdo aprovado")
+        draft.status, draft.scheduled_for = DRAFT_PUBLISHED, None
+        draft.published_at = utcnow()
+        db.commit()
+        request.session["flash"] = "Marcado como publicado."
+        target = next_url if next_url.startswith("/") and not next_url.startswith("//") else f"/items/{item_id}/draft"
+        return RedirectResponse(target, status_code=303)
 
     # ----------------------------------------------------------------- coleta
     def _collect_job():

@@ -10,7 +10,7 @@
   {% if item.relevance_reason %}<div class="why">{{ item.relevance_reason }}</div>{% endif %}
   {% if item.summary and item.summary != item.title %}<p class="excerpt">{{ item.summary[:240] }}{% if item.summary|length > 240 %}…{% endif %}</p>{% endif %}
   {% set d = drafts.get(item.id) if drafts is defined else None %}
-  {% if d %}<p style="margin:0 0 8px"><a class="chip" href="/items/{{ item.id }}/draft">{{ {'generating':'Gerando rascunho…','draft':'Rascunho pronto','approved':'Rascunho aprovado ✓','error':'Rascunho falhou'}[d.status] }}</a></p>{% endif %}
+  {% if d %}<p style="margin:0 0 8px"><a class="chip" href="/items/{{ item.id }}/draft">{{ {'generating':'Gerando rascunho…','draft':'Rascunho pronto','approved':'Aprovado ✓','scheduled':'Agendado','published':'Publicado','error':'Rascunho falhou'}[d.status] }}</a></p>{% endif %}
   <div class="actions">
     {% if item.status == 'new' %}
       {{ status_btn(item, 'post', 'Quero postar', 'primary') }}

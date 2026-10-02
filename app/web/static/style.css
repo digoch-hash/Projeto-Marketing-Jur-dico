@@ -57,3 +57,11 @@ textarea.fld{resize:vertical;line-height:1.4}
 .slide{background:#fafbf7;border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
 .slide-n{font-size:.75rem;font-weight:700;color:var(--green-700);margin-bottom:4px}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
+.ag{display:flex;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.ag:first-of-type{border-top:0}
+.ag-day{flex:0 0 98px;font-weight:600;font-size:.9rem;white-space:nowrap}
+.ag-body{flex:1;min-width:0;overflow-wrap:anywhere}
+.ag.rest{opacity:.55}
+.ag.post{background:#f2f7e8;margin:0 -14px;padding-left:14px;padding-right:14px}
+.top nav .btn{min-height:34px;padding:4px 10px;font-size:.88rem}
+@media (max-width:430px){.top h1{font-size:.95rem}.top h1 span{display:none}}

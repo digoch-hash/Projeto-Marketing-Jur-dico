@@ -18,7 +18,7 @@
       <p class="flash err">Não foi possível gerar: {{ draft.error }}</p>
     {% endif %}
 
-    {% if not draft or draft.status in (DRAFT_ERROR, DRAFT_READY, DRAFT_APPROVED) %}
+    {% if not draft or draft.status in (DRAFT_ERROR, DRAFT_READY, DRAFT_APPROVED, DRAFT_SCHEDULED) %}
     <form method="post" action="/items/{{ item.id }}/draft/generate">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <button class="btn {{ '' if content else 'primary' }}" type="submit" {{ '' if has_key else 'disabled' }}>{{ 'Gerar de novo (substitui este rascunho)' if content else 'Gerar rascunho' }}</button>
@@ -97,18 +97,42 @@
   </form>
 
   <section class="card">
-    {% if draft.status == DRAFT_APPROVED %}
-      <p><strong>Aprovado ✓</strong> {% if draft.approved_at %}<span class="status-line">em {{ draft.approved_at.strftime('%d/%m %H:%M') }} UTC</span>{% endif %}</p>
-      <form method="post" action="/items/{{ item.id }}/draft/approve">
-        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="approve" value="0">
-        <button class="btn" type="submit" style="width:100%">Desfazer aprovação</button>
-      </form>
-    {% elif draft.status == DRAFT_READY %}
+    {% if draft.status == DRAFT_READY %}
       <form method="post" action="/items/{{ item.id }}/draft/approve">
         <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="approve" value="1">
         <button class="btn primary" type="submit" style="width:100%">Aprovar este conteúdo</button>
       </form>
       <p class="status-line">Salve as edições antes de aprovar. Gerado por IA a partir do texto oficial: sempre confira os pontos acima.</p>
+
+    {% elif draft.status in (DRAFT_APPROVED, DRAFT_SCHEDULED) %}
+      {% if draft.status == DRAFT_SCHEDULED %}
+        <p><strong>Agendado para {{ draft.scheduled_for|brdate }}</strong>{% if draft.scheduled_for == today %} (hoje){% endif %}</p>
+      {% else %}
+        <p><strong>Aprovado ✓</strong> <span class="status-line">falta escolher o dia</span></p>
+      {% endif %}
+      <form method="post" action="/items/{{ item.id }}/draft/schedule">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="lbl" for="day">{{ 'Mudar a data' if draft.status == DRAFT_SCHEDULED else 'Dia da publicação' }} (sugestão no ritmo dia sim, dia não: {{ suggested|brdate }})</label>
+        <input id="day" class="fld" type="date" name="day" min="{{ today.isoformat() }}" value="{{ (draft.scheduled_for or suggested).isoformat() }}">
+        <button class="btn primary" type="submit" style="width:100%;margin-top:8px">{{ 'Salvar nova data' if draft.status == DRAFT_SCHEDULED else 'Agendar' }}</button>
+      </form>
+      <form method="post" action="/items/{{ item.id }}/draft/published" style="margin-top:8px">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn" type="submit" style="width:100%">Já publiquei</button>
+      </form>
+      {% if draft.status == DRAFT_SCHEDULED %}
+      <form method="post" action="/items/{{ item.id }}/draft/unschedule" style="margin-top:8px">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn" type="submit" style="width:100%">Tirar do calendário</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/items/{{ item.id }}/draft/approve" style="margin-top:8px">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="approve" value="0">
+        <button class="btn danger" type="submit" style="width:100%">Desfazer aprovação</button>
+      </form>
+
+    {% elif draft.status == DRAFT_PUBLISHED %}
+      <p><strong>Publicado ✓</strong> {% if draft.published_at %}<span class="status-line">em {{ draft.published_at.strftime('%d/%m/%Y') }}</span>{% endif %}</p>
     {% endif %}
   </section>
   {% endif %}

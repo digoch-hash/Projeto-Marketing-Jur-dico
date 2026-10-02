@@ -194,6 +194,7 @@ def run_draft_job(session_factory, settings: Settings, item_id: int, claude_clie
             draft.model = settings.draft_model
             draft.status = DRAFT_READY
             draft.approved_at = None
+            draft.scheduled_for = None  # texto novo precisa ser aprovado e agendado de novo
             draft.generations += 1
             draft.error = ""
         except (DraftError, FullTextError, httpx.HTTPError) as exc:

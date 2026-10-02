@@ -70,6 +70,8 @@ class CollectRun(Base):
 DRAFT_GENERATING = "generating"
 DRAFT_READY = "draft"
 DRAFT_APPROVED = "approved"
+DRAFT_SCHEDULED = "scheduled"
+DRAFT_PUBLISHED = "published"
 DRAFT_ERROR = "error"
 
 
@@ -88,3 +90,5 @@ class Draft(Base):
     started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    scheduled_for: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -5,7 +5,8 @@ lugar), separar o que importa para os clientes da HRBio e decidir o que vira pos
 
 **Fase 1:** coletar → filtrar por relevância → lista de novidades no celular.
 **Fase 2:** ao marcar "Quero postar", o sistema gera o rascunho do conteúdo para você revisar e aprovar.
-Artes, publicação, calendário e métricas entram nas próximas fases.
+**Fase 3:** calendário editorial com ritmo de um post dia sim, dia não.
+Artes, publicação no Instagram e métricas entram nas próximas fases.
 
 ## O que já funciona
 
@@ -36,6 +37,20 @@ Ao marcar **Quero postar** (ou no botão **Gerar rascunho**), o sistema:
 
 Nada é publicado automaticamente. O rascunho usa `ANTHROPIC_DRAFT_MODEL` (padrão `claude-opus-5-5`) com
 `fallbacks` ligado, e o filtro de relevância usa `ANTHROPIC_MODEL` (padrão `claude-haiku-4-5`, bem mais barato).
+
+## Calendário editorial (fase 3)
+
+O caminho de cada norma: **nova → rascunho → aprovado → agendado → publicado**.
+
+- Depois de aprovar o rascunho, o sistema **sugere a próxima data livre** respeitando o ritmo
+  (`MIN_GAP_DAYS = 2` em `app/editorial.py`: nunca dois posts a menos de 2 dias). Você pode escolher outra
+  data; se ela quebrar o ritmo, a tela avisa, mas deixa.
+- A tela **Calendário** mostra os próximos 14 dias (post, dia livre ou descanso), os aprovados sem data, os
+  **atrasados** (agendados que passaram sem marcar como publicados) e os publicados recentes.
+- Publicar ainda é manual: use "Já publiquei" depois de postar. Posts publicados contam para o intervalo.
+- Editar um conteúdo aprovado ou agendado **cancela a aprovação e a data**: ele precisa ser aprovado de novo.
+- "Hoje" é sempre a data de Brasília, mesmo com o servidor em UTC.
+- Bancos criados em fases anteriores ganham as colunas novas sozinhos ao iniciar (migração leve, sem perda de dados).
 
 ## Rodar localmente
 
@@ -77,7 +92,7 @@ SQLite por padrão (`data/app.db`). Para PostgreSQL, defina `DATABASE_URL`
 
 ## Próximas fases
 
-1. ~~Gerador de rascunhos~~ (feito).
-2. Calendário editorial (novo → rascunho → aprovado → publicado), um post dia sim, dia não.
-3. Artes com a identidade visual da HRBio e publicação no Instagram só depois do seu OK.
-4. Reels em vídeo, métricas (alcance, compartilhamentos), avisos por WhatsApp e demais fontes.
+1. ~~Gerador de rascunhos~~ e ~~calendário editorial~~ (feitos).
+2. Artes com a identidade visual da HRBio (carrossel e story prontos para postar).
+3. Publicação no Instagram só depois do seu OK, com métricas (alcance, compartilhamentos, salvamentos).
+4. Reels em vídeo, avisos por WhatsApp e demais fontes (DOU, ANM, IBAMA, ANA).
