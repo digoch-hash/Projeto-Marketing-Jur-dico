@@ -77,6 +77,22 @@ _NOISE = re.compile(
     r"homologacao|adjudicacao|registro de precos|licitacao|atos de pessoal|afastamento|"
     r"retificacao de contrato|empenho)\b"
 )
+# Calibragem pelo TIPO do ato (aprendida com dados reais do DOE/CONSEMA): o que muda a vida do empreendedor
+# sobe; o que e assunto interno do orgao ou acordo administrativo desce.
+_CONSEMA_RES = re.compile(r"\bresolucao consema\b")
+_TECH_NORM = re.compile(r"\b(diretriz tecnica|norma tecnica|instrucao normativa)\b")
+_COOPERATION = re.compile(
+    r"\b(termo de cooperacao|acordo de cooperacao|termo de colaboracao|memorando de entendimento|convenio)\b"
+)
+_GOVERNANCE = re.compile(
+    r"\b(composico?es? d[aoe]s? camaras? tecnicas?|regimento interno|julga\w* (?:os )?processos?|"
+    r"processo eleitoral|cadastramento de entidades|grupo de trabalho|comite gestor)\b"
+)
+_THIRD_PARTY_LICENSE = re.compile(
+    r"\b(renovacao de licenca|emissao de licencas?|aviso de concessao de licenca|"
+    r"torna publico que (?:recebeu|requereu)|requerimento de licenca|pedido de licenca)\b"
+)
+
 # Portarias de designacao de fiscais/gestores de convenio e contrato: o titulo e generico
 # ("PORTARIA SEMA N. 206"), entao o sinal esta no comeco do texto.
 _PERSONNEL = re.compile(
@@ -146,6 +162,22 @@ def score_item(item: "RawItem") -> Classification:
     ):
         value -= 35
         reasons.append("ato administrativo/rotina")
+    head = normalize(f"{item.doc_type} {item.title} {item.summary[:400]}")
+    if _CONSEMA_RES.search(head):
+        value += 20
+        reasons.append("resolução do CONSEMA")
+    elif _TECH_NORM.search(head):
+        value += 15
+        reasons.append("norma técnica")
+    elif _COOPERATION.search(head):
+        value -= 15
+        reasons.append("acordo de cooperação")
+    if _GOVERNANCE.search(head):
+        value -= 25
+        reasons.append("assunto interno do órgão")
+    if _THIRD_PARTY_LICENSE.search(head):
+        value -= 15
+        reasons.append("licença de terceiros")
     value = max(0, min(100, value))
     return Classification(value=value, themes=sorted(hits), reason="; ".join(reasons), by="rules")
 

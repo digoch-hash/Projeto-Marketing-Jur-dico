@@ -27,3 +27,12 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Aviso por e-mail (opcional): veja docs/COLOCAR_NO_AR.md
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: ALERT_EMAILS
+        sync: false

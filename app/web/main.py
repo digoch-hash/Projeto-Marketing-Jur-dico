@@ -12,7 +12,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from app import ig_account, publicurls
+from app import autocard, ig_account, notify, publicurls
 from app.artservice import generate_art
 from app.backup import BackupError, make_backup
 from app.brand_assets import AssetError, BrandAssets
@@ -194,13 +194,17 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
                 select(Item.status, func.count()).where(Item.relevance >= min_rel).group_by(Item.status)
             ).all()
         )
+        hot = db.scalar(
+            select(func.count()).select_from(Item).where(Item.status == "new", Item.relevance >= settings.alert_min_relevance)
+        ) or 0
         last_runs = db.scalars(select(CollectRun).order_by(CollectRun.id.desc()).limit(6)).all()
         last_run = {r.source: r for r in reversed(last_runs)}
         return render(
             request, "index.html",
             user=user, items=items, total=total, status=status, source=source, theme=theme,
             min_rel=min_rel, page=page, pages=max(1, -(-total // PAGE_SIZE)), counts=counts,
-            last_run=last_run,
+            last_run=last_run, hot=hot, alert_min=settings.alert_min_relevance,
+            monitor_text=("todo dia" if settings.collect_every_days == 1 else f"a cada {settings.collect_every_days} dias"),
             drafts={d.item_id: d for d in db.scalars(select(Draft).where(Draft.item_id.in_([i.id for i in items])))},
         )
 
@@ -541,7 +545,23 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
     # --------------------------------------------------------------------- conta
     @app.get("/conta")
     def account_page(request: Request, user: User = Depends(current_user), db=Depends(get_db)):
-        return render(request, "conta.html", user=user, users=db.scalars(select(User).order_by(User.username)).all())
+        return render(
+            request, "conta.html", user=user, users=db.scalars(select(User).order_by(User.username)).all(),
+            email_ok=notify.is_configured(settings), emails=notify.recipients(settings), alert_min=settings.alert_min_relevance,
+        )
+
+    @app.post("/conta/email-teste")
+    def account_test_email(request: Request, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, csrf)
+        if not notify.is_configured(settings):
+            request.session["flash"] = "O e-mail de aviso não está configurado (SMTP_HOST, SMTP_USER, SMTP_PASSWORD e ALERT_EMAILS)."
+        else:
+            try:
+                notify.send_email(settings, "HRBio Radar: e-mail de teste", "Se você recebeu isto, o aviso por e-mail está funcionando.")
+                request.session["flash"] = f"E-mail de teste enviado para {', '.join(notify.recipients(settings))}."
+            except Exception as exc:  # noqa: BLE001 - mostra o motivo (senha errada, servidor...) em vez de erro 500
+                request.session["flash"] = f"Não consegui enviar: {exc}"
+        return RedirectResponse("/conta", status_code=303)
 
     @app.get("/conta/backup")
     def account_backup(request: Request, user: User = Depends(current_user)):
@@ -609,6 +629,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             simulated.add(day)
         return render(
             request, "calendario.html", user=user, today=today, agenda=build_agenda(db, today),
+            gap_text=("só evita dois posts em dias seguidos" if MIN_GAP_DAYS >= 2 else "só evita dois posts no mesmo dia"),
             queue=queue, published=published, overdue=overdue, suggestions=suggestions,
         )
 
@@ -692,6 +713,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         try:
             with session_factory() as db:
                 run_default(db, settings)
+            autocard.run_after_collect(session_factory, settings)
         finally:
             collect_lock.release()
 

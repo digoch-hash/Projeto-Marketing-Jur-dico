@@ -10,7 +10,7 @@
 <main>
   {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
   <h2 style="margin:6px 0 2px">Calendário</h2>
-  <p class="status-line" style="margin-top:0">Ritmo: um post dia sim, dia não. Hoje é {{ today.strftime('%d/%m/%Y') }}.</p>
+  <p class="status-line" style="margin-top:0">Sem cota de posts: só publicamos quando há novidade relevante. O calendário {{ gap_text }}. Hoje é {{ today.strftime('%d/%m/%Y') }}.</p>
 
   {% if overdue %}
   <section class="card note">
@@ -30,6 +30,7 @@
 
   <section class="card">
     <h3 class="sec">Próximos 14 dias</h3>
+    {% if not agenda|selectattr('posts')|list %}<p class="status-line">Nenhum post agendado, e tudo bem. Quando aparecer uma norma relevante, o Radar avisa.</p>{% endif %}
     {% for d in agenda %}
     <div class="ag {{ d.kind }}">
       <div class="ag-day">{{ d.label }}{% if d.is_today %} <span class="chip">hoje</span>{% endif %}</div>
@@ -43,9 +44,9 @@
             </div>
           {% endfor %}
         {% elif d.kind == 'free' %}
-          <span class="status-line">Livre · dia de postar</span>
+          <span class="status-line">Livre</span>
         {% else %}
-          <span class="status-line">Descanso</span>
+          <span class="status-line">Perto de outro post</span>
         {% endif %}
       </div>
     </div>

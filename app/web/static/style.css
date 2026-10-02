@@ -67,3 +67,4 @@ textarea.fld{resize:vertical;line-height:1.4}
 @media (max-width:430px){.top h1{font-size:.95rem}.top h1 span{display:none}}
 .art-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .art-grid img{width:100%;height:auto;border-radius:10px;border:1px solid var(--line);display:block}
+.hot{display:block;background:#eef6dc;border:1px solid var(--lime);color:var(--green-900);border-radius:12px;padding:12px 14px;margin:4px 0 10px;font-weight:600;text-decoration:none}

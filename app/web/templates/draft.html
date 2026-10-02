@@ -136,7 +136,7 @@
       {% endif %}
       <form method="post" action="/items/{{ item.id }}/draft/schedule">
         <input type="hidden" name="csrf" value="{{ csrf }}">
-        <label class="lbl" for="day">{{ 'Mudar a data' if draft.status == DRAFT_SCHEDULED else 'Dia da publicação' }} (sugestão no ritmo dia sim, dia não: {{ suggested|brdate }})</label>
+        <label class="lbl" for="day">{{ 'Mudar a data' if draft.status == DRAFT_SCHEDULED else 'Dia da publicação' }} (próxima data livre: {{ suggested|brdate }})</label>
         <input id="day" class="fld" type="date" name="day" min="{{ today.isoformat() }}" value="{{ (draft.scheduled_for or suggested).isoformat() }}">
         <button class="btn primary" type="submit" style="width:100%;margin-top:8px">{{ 'Salvar nova data' if draft.status == DRAFT_SCHEDULED else 'Agendar' }}</button>
       </form>

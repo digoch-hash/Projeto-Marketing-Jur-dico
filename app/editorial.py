@@ -1,6 +1,7 @@
 """Calendario editorial: ritmo de postagem (dia sim, dia nao) e agenda dos proximos dias."""
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 
@@ -8,7 +9,8 @@ from sqlalchemy import select
 
 from app.models import DRAFT_PUBLISHED, DRAFT_SCHEDULED, Draft, Item
 
-MIN_GAP_DAYS = 2  # 2 = dia sim, dia nao (um dia de intervalo entre posts)
+# Espacamento minimo entre posts (nao e uma meta: so evita dois posts colados). 2 = um dia de intervalo; 1 = so nao repetir o dia.
+MIN_GAP_DAYS = max(1, int(os.getenv("MIN_GAP_DAYS", "2")))
 WEEKDAYS = ("seg", "ter", "qua", "qui", "sex", "sáb", "dom")
 _BRT = timezone(timedelta(hours=-3))  # o Brasil nao tem horario de verao desde 2019
 

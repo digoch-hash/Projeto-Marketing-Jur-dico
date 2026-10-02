@@ -8,7 +8,8 @@ lugar), separar o que importa para os clientes da HRBio e decidir o que vira pos
 **Fase 3:** calendário editorial com ritmo de um post dia sim, dia não.
 **Fase 4:** artes prontas para postar (carrossel e story/Status) no estilo da HRBio.
 **Fase 5:** publicação agendada no Instagram da HRBio, coleta diária e hospedagem.
-Métricas, reels em vídeo e avisos por WhatsApp entram nas próximas fases.
+**Fase 6:** alerta por e-mail só quando há norma muito relevante, já com o card pronto para revisar.
+Métricas e reels em vídeo entram nas próximas fases.
 
 ## O que já funciona
 
@@ -99,6 +100,33 @@ A fonte Montserrat (licença SIL OFL, em `app/art/fonts/OFL.txt`) vai junto no r
 | `PUBLISH_HOUR` | Hora (Brasília) a partir da qual os agendados saem; padrão `9` |
 | `ANTHROPIC_API_KEY` | Rascunhos e filtro de relevância com o Claude |
 | `DISABLE_SCHEDULER=1` | Desliga a rotina em segundo plano (útil em testes) |
+
+## Alerta e card automático (fase 6)
+
+Princípio: **só publicamos quando há algo relevante**. Não existe cota de posts; o calendário só evita dois posts colados
+(`MIN_GAP_DAYS`).
+
+- **Monitoramento:** todo dia às 7h (Brasília), enquanto o sistema estiver no ar. Para a cada 2 dias: `COLLECT_EVERY_DAYS=2`.
+- **Card automático:** depois da coleta, cada norma com nota ≥ `ALERT_MIN_RELEVANCE` (padrão 60) e sem rascunho ganha o
+  rascunho **e as artes**, com teto de `AUTO_DRAFT_MAX_PER_DAY` por dia (padrão 3) para limitar o gasto com o Claude.
+  Exige `ANTHROPIC_API_KEY`; desligue com `AUTO_DRAFT=0`.
+- **E-mail:** um único e-mail por coleta, **só se houver novidade muito relevante** ("Sem novidade, sem e-mail"), dizendo
+  quais cards estão prontos e levando direto ao rascunho. Falha de e-mail não perde a novidade: entra no próximo aviso.
+  Teste o envio na tela **Conta**.
+- **Radar:** faixa no topo com quantas normas muito relevantes esperam a sua decisão.
+- **Nada é publicado sozinho** por causa disso: o card espera a sua revisão e aprovação.
+- **Calibragem da nota:** resolução do CONSEMA e norma técnica sobem; acordo de cooperação, assunto interno do órgão
+  (câmaras técnicas, eleições de comitê, grupos de trabalho) e licença de terceiros descem. Foi ajustada com 8 atos reais;
+  revise depois de algumas semanas de uso (e, com a chave da Anthropic, o Claude refina a nota).
+
+| Variável | Para quê |
+|---|---|
+| `ALERT_MIN_RELEVANCE` | Nota mínima para "muito relevante" (padrão 60) |
+| `AUTO_DRAFT`, `AUTO_DRAFT_MAX_PER_DAY` | Liga/desliga e limita o card automático (padrão ligado, 3 por dia) |
+| `COLLECT_EVERY_DAYS` | 1 = todo dia, 2 = a cada dois dias |
+| `MIN_GAP_DAYS` | Espaçamento mínimo entre posts (2 = um dia de intervalo; 1 = só não repetir o dia) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Conta de e-mail que envia o aviso (porta 465 ou 587) |
+| `ALERT_EMAILS` | Quem recebe (separe por vírgula) |
 
 ## Rodar localmente
 

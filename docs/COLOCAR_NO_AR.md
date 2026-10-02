@@ -32,8 +32,24 @@ posts agendados no horário.
 Pronto. Daqui em diante, abra esse endereço no celular ou no computador. Dica: no celular, use "Adicionar à tela
 inicial" para virar um ícone.
 
+## Aviso por e-mail (opcional, recomendado)
+Para o sistema te avisar quando aparecer uma norma muito relevante, já com o card pronto:
+1. Use um e-mail seu para **enviar** os avisos (pode ser o e-mail da Hostinger da HRBio; o ideal é criar um só para isso,
+   por exemplo `radar@seudominio.com.br`).
+2. Na Render, abra o serviço → **Environment** e acrescente:
+   - `SMTP_HOST`: o servidor de saída do seu e-mail (na Hostinger costuma ser `smtp.hostinger.com`; confira nas
+     configurações do e-mail);
+   - `SMTP_PORT`: `465` (ou `587`, se o seu servidor pedir);
+   - `SMTP_USER`: o endereço de e-mail completo;
+   - `SMTP_PASSWORD`: a senha desse e-mail;
+   - `ALERT_EMAILS`: quem recebe o aviso (o seu e a da sua esposa, separados por vírgula).
+3. Salve (a Render reinicia o serviço) e, na tela **Conta**, clique em **Enviar e-mail de teste**.
+
+Você só recebe e-mail quando há novidade muito relevante. Sem novidade, sem e-mail.
+
 ## O que acontece sozinho depois
-- **Todo dia às 7h (Brasília):** o sistema busca as normas novas (Diário Oficial, CONSEMA, FEPAM).
+- **Todo dia às 7h (Brasília):** o sistema busca as normas novas (Diário Oficial, CONSEMA, FEPAM). Para a cada dois dias, defina `COLLECT_EVERY_DAYS=2`.
+- **Logo depois:** se houver norma muito relevante, gera o rascunho e as artes (até 3 por dia) e te avisa por e-mail.
 - **Dias de publicação, a partir das 9h:** posta o que você aprovou e agendou (só se a publicação automática estiver
   ligada, veja `docs/CONECTAR_INSTAGRAM.md`).
 - **Autorização do Instagram:** renovada sozinha antes de vencer (vale 60 dias).

@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import select
 
 from app import ig_account
+from app import autocard
 from app.collector import run_default
 from app.config import Settings
 from app.editorial import _BRT
@@ -19,8 +20,8 @@ COLLECT_HOUR = 7
 
 
 class Scheduler:
-    def __init__(self, session_factory, settings: Settings, http=None):
-        self.session_factory, self.settings, self.http = session_factory, settings, http
+    def __init__(self, session_factory, settings: Settings, http=None, claude_client=None):
+        self.session_factory, self.settings, self.http, self.claude_client = session_factory, settings, http, claude_client
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._lock = threading.Lock()
@@ -39,7 +40,10 @@ class Scheduler:
 
     def _collect(self, local, done):
         with self.session_factory() as db:
-            if local.hour < COLLECT_HOUR or ig_account.get(db, "last_collect") == local.date().isoformat():
+            last = ig_account.get(db, "last_collect")
+            if local.hour < COLLECT_HOUR:
+                return
+            if last and (local.date() - date.fromisoformat(last)).days < self.settings.collect_every_days:
                 return
             ig_account.put(db, "last_collect", local.date().isoformat())  # marca antes: falha nao repete a cada minuto
             try:
@@ -48,6 +52,16 @@ class Scheduler:
             except Exception:  # noqa: BLE001
                 log.exception("coleta diaria falhou")
                 done.append("collect-failed")
+                return
+        try:
+            result = autocard.run_after_collect(self.session_factory, self.settings, claude_client=self.claude_client)
+            if result["ready"]:
+                done.append(f"cards:{len(result['ready'])}")
+            if result["alerted"]:
+                done.append(f"alert:{result['alerted']}")
+        except Exception:  # noqa: BLE001
+            log.exception("cards/aviso automaticos falharam")
+            done.append("cards-failed")
 
     def _refresh(self, now, done):
         with self.session_factory() as db:
