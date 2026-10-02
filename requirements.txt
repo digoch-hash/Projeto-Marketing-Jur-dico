@@ -9,4 +9,4 @@ itsdangerous>=2.1
 anthropic>=1.11
 pydantic>=2.5
 pillow>=10.0
-pytest>=8.0
+cryptography>=42.0

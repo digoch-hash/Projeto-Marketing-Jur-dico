@@ -1,0 +1,29 @@
+# Blueprint da Render: cria o servico, o disco permanente e as variaveis de ambiente.
+# IMPORTANTE: escolha um plano PAGO (o gratuito dorme apos 15 min sem acesso e nao tem disco,
+# entao nao publicaria no horario nem guardaria o banco). Veja docs/COLOCAR_NO_AR.md.
+services:
+  - type: web
+    name: hrbio-radar
+    runtime: docker
+    healthCheckPath: /healthz
+    disk:
+      name: dados
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "1"
+      - key: DATABASE_URL
+        value: sqlite:////var/data/app.db
+      - key: DATA_DIR
+        value: /var/data
+      - key: PUBLISH_HOUR
+        value: "9"
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

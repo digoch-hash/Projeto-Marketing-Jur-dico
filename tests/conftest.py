@@ -23,7 +23,7 @@ def fixture_json(name: str):
 def settings(tmp_path):
     return Settings(
         database_url="sqlite://", secret_key="test-secret", anthropic_api_key=None,
-        anthropic_model="test-model", draft_model="test-draft-model", lookback_days=7, user_agent="test", data_dir=str(tmp_path),
+        anthropic_model="test-model", draft_model="test-draft-model", lookback_days=7, user_agent="test", data_dir=str(tmp_path), scheduler_enabled=False,
     )
 
 

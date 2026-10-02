@@ -12,6 +12,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 PHOTO_NAME = re.compile(r"^[0-9a-f]{12}\.jpg$")
 ART_NAME = re.compile(r"^(slide_\d{2}|story)\.png$")
+ART_JPG_NAME = re.compile(r"^(slide_\d{2}|story)\.jpg$")
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 PHOTO_MAX_SIDE = 2400
 THUMB_SIDE = 480
@@ -136,6 +137,7 @@ class BrandAssets:
         folder.mkdir(parents=True, exist_ok=True)
         for name, img in images.items():
             img.save(folder / f"{name}.png", "PNG", compress_level=6)  # optimize=True leva ~30 s por conjunto com foto
+            img.convert("RGB").save(folder / f"{name}.jpg", "JPEG", quality=92)  # o Instagram so aceita JPEG
         return self.list_art(item_id)
 
     def list_art(self, item_id: int) -> list[str]:
@@ -144,6 +146,12 @@ class BrandAssets:
 
     def art_path(self, item_id: int, name: str) -> Path | None:
         if not ART_NAME.match(name):
+            return None
+        path = self.art_dir(item_id) / name
+        return path if path.is_file() else None
+
+    def art_jpg_path(self, item_id: int, name: str) -> Path | None:
+        if not ART_JPG_NAME.match(name):
             return None
         path = self.art_dir(item_id) / name
         return path if path.is_file() else None

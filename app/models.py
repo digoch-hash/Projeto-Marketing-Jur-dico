@@ -93,3 +93,18 @@ class Draft(Base):
     scheduled_for: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
     published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     photo: Mapped[str | None] = mapped_column(String(200), nullable=True)  # foto de fundo escolhida para as artes
+    # publicacao automatica no Instagram: None | publishing | failed | uncertain
+    publish_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    publish_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    publish_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ig_media_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ig_permalink: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+
+class Setting(Base):
+    """Configuracoes que mudam pela tela (ex.: conexao com o Instagram). O token fica criptografado."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")

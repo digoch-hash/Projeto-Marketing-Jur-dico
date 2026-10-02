@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import os
 import threading
+from contextlib import asynccontextmanager
 from datetime import date, datetime
 from pathlib import Path
 
@@ -12,7 +12,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.art.render import render_set
+from app import ig_account, publicurls
+from app.artservice import generate_art
+from app.backup import BackupError, make_backup
 from app.brand_assets import AssetError, BrandAssets
 from app.collector import run_default
 from app.editorial import MIN_GAP_DAYS, build_agenda, conflicts, suggest_date, taken_dates, today_br
@@ -22,16 +24,32 @@ from app.db import init_db, make_engine, make_session_factory
 from app.models import (
     DRAFT_APPROVED, DRAFT_ERROR, DRAFT_GENERATING, DRAFT_PUBLISHED, DRAFT_READY, DRAFT_SCHEDULED, STATUSES, CollectRun, Draft, Item, User, utcnow,
 )
+from app.instagram import InstagramError
+from app.publisher import is_stuck, mark_published_by_hand, publish_draft, release_uncertain
 from app.relevance import THEMES
-from app.security import new_csrf_token, verify_password
+from app.scheduler import Scheduler
+from app.security import LoginThrottle, hash_password, new_csrf_token, verify_password
 
 BASE_DIR = Path(__file__).parent
+_DUMMY_HASH = hash_password("senha-qualquer-para-igualar-o-tempo")
 PAGE_SIZE = 20
 DEFAULT_MIN_RELEVANCE = 40
 
 SOURCE_LABELS = {"doe_rs": "Diário Oficial RS", "consema": "CONSEMA", "fepam": "FEPAM"}
 STATUS_LABELS = {"new": "Novas", "post": "Quero postar", "later": "Depois", "ignored": "Ignoradas"}
 TAB_LABELS = {"new": "Novas", "post": "Postar", "later": "Depois", "ignored": "Ignoradas"}
+
+
+def ensure_admin(session_factory, settings: Settings) -> None:
+    """Cria o primeiro usuario a partir de ADMIN_USERNAME/ADMIN_PASSWORD (hospedagem sem terminal). Nunca troca senha."""
+    if not settings.admin_username or not settings.admin_password:
+        return
+    if len(settings.admin_password) < 8:
+        raise RuntimeError("ADMIN_PASSWORD precisa ter pelo menos 8 caracteres.")
+    with session_factory() as db:
+        if not db.scalar(select(User).where(User.username == settings.admin_username)):
+            db.add(User(username=settings.admin_username, password_hash=hash_password(settings.admin_password)))
+            db.commit()
 
 
 def create_app(settings: Settings | None = None, session_factory=None) -> FastAPI:
@@ -41,14 +59,39 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         init_db(engine)
         session_factory = make_session_factory(engine)
 
-    app = FastAPI(title="HRBio · Radar de Normas", docs_url=None, redoc_url=None)
+    if settings.cookie_secure and settings.secret_key in ("", "dev-only-change-me", "troque-esta-chave"):
+        raise RuntimeError("Em produção (COOKIE_SECURE=1) defina um SECRET_KEY secreto e único.")
+    ensure_admin(session_factory, settings)
+    scheduler = Scheduler(session_factory, settings) if settings.scheduler_enabled else None
+
+    @asynccontextmanager
+    async def lifespan(_app):
+        if scheduler:
+            scheduler.start()
+        yield
+        if scheduler:
+            scheduler.stop()
+
+    app = FastAPI(title="HRBio · Radar de Normas", docs_url=None, redoc_url=None, lifespan=lifespan)
+    app.state.scheduler = scheduler
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.secret_key,
         max_age=60 * 60 * 24 * 30,
         same_site="lax",
-        https_only=os.getenv("COOKIE_SECURE", "0") == "1",  # use COOKIE_SECURE=1 em producao (HTTPS)
+        https_only=settings.cookie_secure,
     )
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
+        return response
+
+    throttle = LoginThrottle()
     app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
     templates = Jinja2Templates(directory=BASE_DIR / "templates")
     templates.env.globals.update(
@@ -94,9 +137,18 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
 
     @app.post("/login")
     def login(request: Request, username: str = Form(...), password: str = Form(...), db=Depends(get_db)):
-        user = db.scalar(select(User).where(User.username == username.strip()))
-        if not user or not verify_password(password, user.password_hash):
+        name = username.strip().lower()
+        ip = request.client.host if request.client else "?"
+        wait = throttle.blocked_for(f"u:{name}", f"ip:{ip}")
+        if wait:
+            return render(request, "login.html", error=f"Muitas tentativas. Tente de novo em {wait // 60 + 1} min.")
+        user = db.scalar(select(User).where(func.lower(User.username) == name))
+        ok = verify_password(password, user.password_hash if user else _DUMMY_HASH)  # mesmo custo com ou sem usuario
+        if not user or not ok:
+            throttle.failure(f"u:{name}")
+            throttle.failure(f"ip:{ip}", limit=30)
             return render(request, "login.html", error="Usuário ou senha incorretos.")
+        throttle.success(f"u:{name}")
         request.session.clear()
         request.session["uid"] = user.id
         return RedirectResponse("/", status_code=303)
@@ -211,6 +263,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             suggested=suggest_date(taken_dates(db, exclude_item_id=item_id), today_br()),
             today=today_br(),
             art_files=assets.list_art(item_id), photos=assets.list_photos(),
+            ig=ig_context(db), stuck=bool(draft and is_stuck(draft)),
         )
 
     @app.post("/items/{item_id}/draft/generate")
@@ -303,19 +356,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         if not draft or not draft.content:
             raise HTTPException(400, "Gere o rascunho antes das artes")
         content = DraftContent.model_validate_json(draft.content)
-        chosen = assets.pick_photo(item_id) if photo == "auto" else (photo if assets.photo_path(photo) else None)
-        draft.photo = None if photo == "auto" else chosen
-        images = render_set(
-            slides=[(sl.title, sl.body) for sl in content.carousel],
-            headline=content.headline,
-            status_text=content.whatsapp_status,
-            norm_label=item.title,
-            photo=assets.load_photo(chosen),
-            logo_dark_bg=assets.load_logo('escuro'),
-            logo_light_bg=assets.load_logo('claro'),
-            seed=item_id,
-        )
-        assets.save_art(item_id, images)
+        images = generate_art(assets, item, draft, content, photo)
         db.commit()
         request.session["flash"] = f"{len(images)} artes geradas."
         return RedirectResponse(f"/items/{item_id}/draft#artes", status_code=303)
@@ -401,6 +442,147 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         if not path:
             raise HTTPException(404, "Sem logo")
         return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
+
+    # ------------------------------------------------------- imagens para o Instagram
+    @app.get("/pub/{item_id}/{exp}/{sig}/{name}")
+    def public_art(item_id: int, exp: int, sig: str, name: str):
+        """Sem login, de proposito: o Instagram baixa a imagem daqui. So funciona com o link assinado e dentro da validade."""
+        if not publicurls.verify(settings.secret_key, item_id, exp, sig, name):
+            raise HTTPException(404, "Link inválido ou vencido")
+        path = assets.art_jpg_path(item_id, name)
+        if not path:
+            raise HTTPException(404, "Imagem não encontrada")
+        return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+    # ----------------------------------------------------------------- instagram
+    def ig_context(db) -> dict:
+        info = ig_account.status(db)
+        info["public_url_ok"] = settings.public_base_url.startswith("https://")
+        info["publish_hour"] = settings.publish_hour
+        return info
+
+    @app.get("/instagram")
+    def instagram_page(request: Request, user: User = Depends(current_user), db=Depends(get_db)):
+        return render(request, "instagram.html", user=user, ig=ig_context(db), public_url=settings.public_base_url)
+
+    @app.post("/instagram/conectar")
+    async def instagram_connect(request: Request, user: User = Depends(current_user), db=Depends(get_db)):
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        try:
+            username = ig_account.connect(db, settings, str(form.get("token", "")))
+            request.session["flash"] = f"Conectado como @{username}. Deixei a publicação automática DESLIGADA: teste antes de ligar."
+        except InstagramError as exc:
+            request.session["flash"] = f"Não foi possível conectar: {exc}"
+        return RedirectResponse("/instagram", status_code=303)
+
+    @app.post("/instagram/config")
+    async def instagram_config(request: Request, user: User = Depends(current_user), db=Depends(get_db)):
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        if not ig_account.is_connected(db):
+            raise HTTPException(400, "Conecte o Instagram primeiro")
+        ig_account.put(db, "ig_auto_publish", "1" if form.get("auto_publish") else "0")
+        ig_account.put(db, "ig_publish_story", "1" if form.get("publish_story") else "0")
+        request.session["flash"] = "Configurações salvas."
+        return RedirectResponse("/instagram", status_code=303)
+
+    @app.post("/instagram/desconectar")
+    def instagram_disconnect(request: Request, csrf: str = Form(""), user: User = Depends(current_user), db=Depends(get_db)):
+        check_csrf(request, csrf)
+        ig_account.disconnect(db)
+        request.session["flash"] = "Instagram desconectado. O token foi apagado do sistema."
+        return RedirectResponse("/instagram", status_code=303)
+
+    @app.post("/items/{item_id}/draft/publish-now")
+    def draft_publish_now(
+        request: Request,
+        background: BackgroundTasks,
+        item_id: int,
+        csrf: str = Form(""),
+        user: User = Depends(current_user),
+        db=Depends(get_db),
+    ):
+        check_csrf(request, csrf)
+        _, draft = load_draft_page(db, item_id)
+        if not draft or draft.status not in (DRAFT_APPROVED, DRAFT_SCHEDULED):
+            raise HTTPException(400, "Só dá para publicar um conteúdo aprovado")
+        if not ig_account.is_connected(db):
+            request.session["flash"] = "Conecte o Instagram antes (tela Instagram)."
+        elif draft.publish_state in ("publishing", "uncertain"):
+            request.session["flash"] = "Já há uma publicação em andamento ou a confirmar para este item."
+        else:
+            background.add_task(publish_draft, session_factory, settings, item_id)
+            request.session["flash"] = "Publicando no Instagram… leva cerca de 1 minuto. Atualize a página."
+        return RedirectResponse(f"/items/{item_id}/draft", status_code=303)
+
+    @app.post("/items/{item_id}/draft/publish-resolve")
+    def draft_publish_resolve(
+        request: Request,
+        item_id: int,
+        action: str = Form(...),
+        csrf: str = Form(""),
+        user: User = Depends(current_user),
+        db=Depends(get_db),
+    ):
+        """Depois de uma publicacao 'a confirmar': o usuario diz se o post saiu ou nao."""
+        check_csrf(request, csrf)
+        load_draft_page(db, item_id)
+        if action == "published":
+            mark_published_by_hand(db, item_id)
+            request.session["flash"] = "Marcado como publicado."
+        elif action == "retry":
+            release_uncertain(db, item_id)
+            request.session["flash"] = "Liberado. Você pode publicar de novo."
+        else:
+            raise HTTPException(400, "Ação inválida")
+        return RedirectResponse(f"/items/{item_id}/draft", status_code=303)
+
+    # --------------------------------------------------------------------- conta
+    @app.get("/conta")
+    def account_page(request: Request, user: User = Depends(current_user), db=Depends(get_db)):
+        return render(request, "conta.html", user=user, users=db.scalars(select(User).order_by(User.username)).all())
+
+    @app.get("/conta/backup")
+    def account_backup(request: Request, user: User = Depends(current_user)):
+        try:
+            data, name = make_backup(settings)
+        except BackupError as exc:
+            request.session["flash"] = str(exc)
+            return RedirectResponse("/conta", status_code=303)
+        return Response(data, media_type="application/zip", headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"})
+
+    @app.post("/conta/senha")
+    async def account_password(request: Request, user: User = Depends(current_user), db=Depends(get_db)):
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        new = str(form.get("nova", ""))
+        if not verify_password(str(form.get("atual", "")), user.password_hash):
+            request.session["flash"] = "A senha atual está errada."
+        elif len(new) < 8:
+            request.session["flash"] = "A nova senha precisa ter pelo menos 8 caracteres."
+        else:
+            user.password_hash = hash_password(new)
+            db.commit()
+            request.session["flash"] = "Senha alterada."
+        return RedirectResponse("/conta", status_code=303)
+
+    @app.post("/conta/usuario")
+    async def account_add_user(request: Request, user: User = Depends(current_user), db=Depends(get_db)):
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        name, pw = str(form.get("usuario", "")).strip(), str(form.get("senha", ""))
+        if not name or len(name) > 64:
+            request.session["flash"] = "Informe um nome de usuário."
+        elif len(pw) < 8:
+            request.session["flash"] = "A senha precisa ter pelo menos 8 caracteres."
+        elif db.scalar(select(User).where(func.lower(User.username) == name.lower())):
+            request.session["flash"] = "Esse usuário já existe."
+        else:
+            db.add(User(username=name, password_hash=hash_password(pw)))
+            db.commit()
+            request.session["flash"] = f"Usuário {name} criado."
+        return RedirectResponse("/conta", status_code=303)
 
     # --------------------------------------------------------------- calendario
     @app.get("/calendario")

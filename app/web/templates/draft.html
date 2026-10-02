@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Rascunho · {{ item.title }}{% endblock %}
-{% block head %}{% if draft and draft.status == DRAFT_GENERATING %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block head %}{% if draft and (draft.status == DRAFT_GENERATING or (draft.publish_state == 'publishing' and not stuck)) %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
 {% block body %}
 <main>
   <p><a href="/items/{{ item.id }}">← Voltar para a norma</a></p>
@@ -140,6 +140,37 @@
         <input id="day" class="fld" type="date" name="day" min="{{ today.isoformat() }}" value="{{ (draft.scheduled_for or suggested).isoformat() }}">
         <button class="btn primary" type="submit" style="width:100%;margin-top:8px">{{ 'Salvar nova data' if draft.status == DRAFT_SCHEDULED else 'Agendar' }}</button>
       </form>
+      {% if draft.publish_state == 'publishing' and not stuck %}
+        <p class="flash">Publicando no Instagram… leva cerca de 1 minuto. Esta página se atualiza sozinha.</p>
+      {% elif draft.publish_state == 'failed' %}
+        <p class="flash err">Não saiu no Instagram: {{ draft.publish_error }}</p>
+      {% elif draft.publish_state == 'uncertain' or stuck %}
+        <div class="card note">
+          <strong>Confirme no Instagram</strong>
+          <p>{{ draft.publish_error or 'A publicação ficou sem resposta.' }} Abra o perfil da HRBio e veja se o post está lá.</p>
+          <form method="post" action="/items/{{ item.id }}/draft/publish-resolve" style="margin-top:6px">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="published">
+            <button class="btn small" type="submit" style="width:100%">Sim, o post está lá</button>
+          </form>
+          <form method="post" action="/items/{{ item.id }}/draft/publish-resolve" style="margin-top:6px">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="retry">
+            <button class="btn small danger" type="submit" style="width:100%">Não está lá: liberar para tentar de novo</button>
+          </form>
+        </div>
+      {% endif %}
+      {% if ig.connected and draft.publish_state not in ('publishing', 'uncertain') %}
+        {% if draft.status == DRAFT_SCHEDULED and ig.auto_publish %}
+          <p class="status-line">O sistema publica sozinho em {{ draft.scheduled_for|brdate }} a partir das {{ '%02d'|format(ig.publish_hour) }}h (horário de Brasília).</p>
+        {% elif draft.status == DRAFT_SCHEDULED %}
+          <p class="status-line">Publicação automática desligada (tela Instagram): publique à mão e use "Já publiquei".</p>
+        {% endif %}
+        <form method="post" action="/items/{{ item.id }}/draft/publish-now" style="margin-top:8px" onsubmit="return confirm('Publicar agora no Instagram da HRBio?')">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn primary" type="submit" style="width:100%">{{ 'Tentar publicar de novo' if draft.publish_state == 'failed' else 'Publicar agora no Instagram' }}</button>
+        </form>
+      {% elif not ig.connected %}
+        <p class="status-line">Para publicar daqui, <a href="/instagram">conecte o Instagram</a>.</p>
+      {% endif %}
       <form method="post" action="/items/{{ item.id }}/draft/published" style="margin-top:8px">
         <input type="hidden" name="csrf" value="{{ csrf }}">
         <button class="btn" type="submit" style="width:100%">Já publiquei</button>
@@ -156,7 +187,9 @@
       </form>
 
     {% elif draft.status == DRAFT_PUBLISHED %}
-      <p><strong>Publicado ✓</strong> {% if draft.published_at %}<span class="status-line">em {{ draft.published_at.strftime('%d/%m/%Y') }}</span>{% endif %}</p>
+      <p><strong>Publicado ✓</strong> {% if draft.published_at %}<span class="status-line">em {{ draft.published_at.strftime('%d/%m/%Y') }}</span>{% endif %}
+        {% if draft.ig_permalink %}<br><a href="{{ draft.ig_permalink }}" target="_blank" rel="noopener noreferrer">Ver no Instagram ↗</a>{% endif %}</p>
+      {% if draft.publish_error %}<p class="status-line err">{{ draft.publish_error }}</p>{% endif %}
     {% endif %}
   </section>
   {% endif %}

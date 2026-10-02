@@ -7,7 +7,8 @@ lugar), separar o que importa para os clientes da HRBio e decidir o que vira pos
 **Fase 2:** ao marcar "Quero postar", o sistema gera o rascunho do conteúdo para você revisar e aprovar.
 **Fase 3:** calendário editorial com ritmo de um post dia sim, dia não.
 **Fase 4:** artes prontas para postar (carrossel e story/Status) no estilo da HRBio.
-Publicação no Instagram e métricas entram nas próximas fases.
+**Fase 5:** publicação agendada no Instagram da HRBio, coleta diária e hospedagem.
+Métricas, reels em vídeo e avisos por WhatsApp entram nas próximas fases.
 
 ## O que já funciona
 
@@ -74,10 +75,35 @@ Editar o texto do rascunho apaga as artes antigas, para nunca sair arte desatual
 Arquivos enviados e artes ficam em `DATA_DIR` (padrão `data/`), fora do banco e fora do Git.
 A fonte Montserrat (licença SIL OFL, em `app/art/fonts/OFL.txt`) vai junto no repositório.
 
+## Publicação no Instagram e hospedagem (fase 5)
+
+- **No ar sem programador:** `docs/COLOCAR_NO_AR.md` (Render, plano pago, cerca de 10 minutos).
+- **Conectar o Instagram:** `docs/CONECTAR_INSTAGRAM.md`. Usa a API oficial da Meta; o sistema nunca guarda a senha
+  do Instagram, só um token **criptografado** (chave derivada do `SECRET_KEY`) que ele renova sozinho.
+- **Publicação:** carrossel (e, se ligado, o story) no dia agendado, a partir de `PUBLISH_HOUR` (padrão 9h de Brasília).
+  Só sai o que foi aprovado e agendado. Atrasados não saem sozinhos. Falha antes do último passo: continua agendado e
+  mostra o motivo. Resposta perdida no último passo: marca **"a confirmar"** e **nunca** tenta de novo sozinho
+  (evita post duplicado).
+- **Rotina diária:** coleta das fontes às 7h e renovação do token, no mesmo processo (use **um único worker**).
+- **Imagens para o Instagram:** servidas em links públicos assinados e temporários (6 h), só do arquivo pedido.
+- **Segurança do servidor público:** trava de tentativas de senha, cookie seguro, cabeçalhos de segurança, recusa
+  subir com `SECRET_KEY` fraca quando `COOKIE_SECURE=1`, usuário inicial por `ADMIN_USERNAME`/`ADMIN_PASSWORD`
+  (sem precisar de terminal), troca de senha e criação de usuários pela tela **Conta**, e **backup** em um clique.
+
+| Variável | Para quê |
+|---|---|
+| `SECRET_KEY` | Assina o login e criptografa o token do Instagram (a Render gera sozinha) |
+| `COOKIE_SECURE=1` | Obrigatório em produção (HTTPS) |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | Cria o primeiro usuário no primeiro start (nunca troca uma senha existente) |
+| `PUBLIC_BASE_URL` | Endereço https do sistema (na Render, `RENDER_EXTERNAL_URL` é usado sozinho) |
+| `PUBLISH_HOUR` | Hora (Brasília) a partir da qual os agendados saem; padrão `9` |
+| `ANTHROPIC_API_KEY` | Rascunhos e filtro de relevância com o Claude |
+| `DISABLE_SCHEDULER=1` | Desliga a rotina em segundo plano (útil em testes) |
+
 ## Rodar localmente
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # (em produção basta requirements.txt)
 cp .env.example .env          # ajuste SECRET_KEY; a chave da Anthropic é opcional
 export $(grep -v '^#' .env | xargs)
 
@@ -110,11 +136,14 @@ SQLite por padrão (`data/app.db`). Para PostgreSQL, defina `DATABASE_URL`
 - A data das resoluções do CONSEMA vem da data de envio do PDF (a página não publica a data da reunião).
 - O DOU (ANM, IBAMA, ANA) e o SINCAGE (legislação estadual consolidada) ainda não foram ligados:
   são as próximas fontes.
-- Em produção use HTTPS e `COOKIE_SECURE=1`.
+- Em produção use HTTPS e `COOKIE_SECURE=1` (veja `docs/COLOCAR_NO_AR.md`).
+- A publicação no Instagram foi testada só contra um Instagram simulado (a API real exige o seu token): faça o teste
+  com "Publicar agora" antes de ligar a publicação automática.
+- Reels em vídeo e métricas ainda não existem.
 
 ## Próximas fases
 
 1. ~~Gerador de rascunhos~~ e ~~calendário editorial~~ (feitos).
 2. ~~Artes com a identidade da HRBio~~ (feito).
-3. Publicação no Instagram só depois do seu OK, com métricas (alcance, compartilhamentos, salvamentos).
-4. Reels em vídeo, avisos por WhatsApp e demais fontes (DOU, ANM, IBAMA, ANA).
+3. ~~Publicação agendada no Instagram~~ (feito).
+4. Métricas (alcance, compartilhamentos, salvamentos), reels em vídeo, avisos por WhatsApp e demais fontes (DOU, ANM, IBAMA, ANA).

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Instagram{% endblock %}
+{% block body %}
+<main>
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+  <h2 style="margin:6px 0 2px">Instagram</h2>
+  <p class="status-line" style="margin-top:0">Conexão oficial com a conta da HRBio. O sistema <strong>não guarda a senha</strong>: guarda só uma autorização para publicar, que você pode apagar aqui quando quiser.</p>
+
+  <section class="card">
+    <h3 class="sec">Estado</h3>
+    {% if ig.connected %}
+      <p><strong>Conectado como @{{ ig.username }}</strong></p>
+      <p class="status-line">Autorização válida por mais {{ ig.days_left }} dias; o sistema renova sozinho.</p>
+    {% else %}
+      <p>Não conectado.</p>
+    {% endif %}
+    <ul class="status-line" style="padding-left:18px">
+      <li>Endereço público (https) do sistema: {% if ig.public_url_ok %}<strong>ok</strong> ({{ public_url }}){% else %}<span class="err"><strong>falta</strong></span>: defina PUBLIC_BASE_URL. O Instagram precisa baixar as imagens por esse endereço.{% endif %}</li>
+      <li>Horário das publicações automáticas: {{ '%02d'|format(ig.publish_hour) }}h de Brasília (variável PUBLISH_HOUR).</li>
+    </ul>
+  </section>
+
+  {% if ig.connected %}
+  <section class="card">
+    <h3 class="sec">Publicação automática</h3>
+    <form method="post" action="/instagram/config">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label style="display:flex;gap:10px;align-items:flex-start;margin:6px 0"><input type="checkbox" name="auto_publish" {{ 'checked' if ig.auto_publish else '' }} style="margin-top:4px;width:22px;height:22px">
+        <span><strong>Publicar sozinho os posts agendados</strong><br><span class="status-line">No dia marcado, a partir das {{ '%02d'|format(ig.publish_hour) }}h. Só sai o que você aprovou e agendou. Teste antes com "Publicar agora" em um post.</span></span></label>
+      <label style="display:flex;gap:10px;align-items:flex-start;margin:10px 0"><input type="checkbox" name="publish_story" {{ 'checked' if ig.publish_story else '' }} style="margin-top:4px;width:22px;height:22px">
+        <span><strong>Publicar também o story</strong><br><span class="status-line">Logo depois do carrossel, a imagem vertical vai para os stories.</span></span></label>
+      <button class="btn primary" type="submit" style="width:100%">Salvar</button>
+    </form>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h3 class="sec">{{ 'Trocar a autorização' if ig.connected else 'Conectar' }}</h3>
+    <ol class="status-line" style="padding-left:18px">
+      <li>No painel da Meta para desenvolvedores, abra o seu app e vá em <em>Instagram → API setup with Instagram login</em>.</li>
+      <li>Adicione a conta da HRBio e clique em <strong>Generate token</strong>; entre no Instagram quando pedir.</li>
+      <li>Copie o token gerado e cole abaixo. Passo a passo completo em <code>docs/CONECTAR_INSTAGRAM.md</code>.</li>
+    </ol>
+    <form method="post" action="/instagram/conectar" autocomplete="off">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label class="lbl" for="token">Token de acesso</label>
+      <input id="token" class="fld" type="password" name="token" required autocomplete="off" autocapitalize="none" spellcheck="false">
+      <button class="btn primary" type="submit" style="width:100%;margin-top:8px">Conectar</button>
+    </form>
+    {% if ig.connected %}
+    <form method="post" action="/instagram/desconectar" style="margin-top:8px" onsubmit="return confirm('Apagar a autorização do Instagram deste sistema?')">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn small danger" type="submit" style="width:100%">Desconectar e apagar o token</button>
+    </form>
+    {% endif %}
+  </section>
+</main>
+{% endblock %}
