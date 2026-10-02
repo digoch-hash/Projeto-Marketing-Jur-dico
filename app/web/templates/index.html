@@ -11,6 +11,12 @@
 <main>
   {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
 
+  {% if hot %}
+    <a class="hot" href="/?status=new&min_rel={{ alert_min }}">⭐ {{ hot }} norma{{ 's' if hot != 1 }} muito relevante{{ 's' if hot != 1 }} esperando a sua decisão</a>
+  {% else %}
+    <p class="status-line" style="margin:2px 0 8px">Nenhuma novidade muito relevante agora. Sem pressão: só postamos quando valer a pena.</p>
+  {% endif %}
+
   <nav class="tabs" aria-label="Situação">
     {% for key, label in STATUS_LABELS.items() %}
       <a class="tab {{ 'on' if status == key else '' }}" href="/?status={{ key }}&source={{ source }}&theme={{ theme }}&min_rel={{ min_rel }}">{{ TAB_LABELS[key] }} <small>{{ counts.get(key, 0) }}</small></a>
@@ -47,6 +53,7 @@
   </div>
   {% endif %}
 
+  <p class="status-line" style="margin-bottom:2px">O sistema olha as fontes {{ monitor_text }} às 07h (Brasília), enquanto estiver no ar.</p>
   <div class="status-line">
     {% for src, r in last_run.items() %}
       {{ SOURCE_LABELS.get(src, src) }}: {{ r.started_at.strftime('%d/%m %H:%M') }} UTC{% if r.error %} <span class="err">(falhou: {{ r.error }})</span>{% else %} ({{ r.created }} novas){% endif %}{% if not loop.last %} · {% endif %}

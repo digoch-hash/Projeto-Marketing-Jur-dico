@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Rascunho · {{ item.title }}{% endblock %}
+{% block head %}{% if draft and (draft.status == DRAFT_GENERATING or (draft.publish_state == 'publishing' and not stuck)) %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block body %}
+<main>
+  <p><a href="/items/{{ item.id }}">← Voltar para a norma</a></p>
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+  <article class="card">
+    <div class="meta"><span class="badge src">{{ SOURCE_LABELS.get(item.source, item.source) }}</span><span>{{ item.published_at|brdate }}</span></div>
+    <h2 style="font-size:1.1rem"><a href="/items/{{ item.id }}" style="display:block">{{ item.title }}</a></h2>
+    <p><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Abrir norma oficial ↗</a></p>
+
+    {% if not draft %}
+      <p>Ainda não há rascunho para este item.</p>
+    {% elif draft.status == DRAFT_GENERATING %}
+      <p class="flash">Gerando o rascunho… leva cerca de 1 minuto. Esta página se atualiza sozinha.</p>
+    {% elif draft.status == DRAFT_ERROR %}
+      <p class="flash err">Não foi possível gerar: {{ draft.error }}</p>
+    {% endif %}
+
+    {% if not draft or draft.status in (DRAFT_ERROR, DRAFT_READY, DRAFT_APPROVED, DRAFT_SCHEDULED) %}
+    <form method="post" action="/items/{{ item.id }}/draft/generate">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn {{ '' if content else 'primary' }}" type="submit" {{ '' if has_key else 'disabled' }}>{{ 'Gerar de novo (substitui este rascunho)' if content else 'Gerar rascunho' }}</button>
+      {% if not has_key %}<p class="status-line">Configure ANTHROPIC_API_KEY no servidor para gerar rascunhos.</p>{% endif %}
+    </form>
+    {% endif %}
+  </article>
+
+  {% if content %}
+  {% if content.review_notes %}
+  <section class="card note">
+    <strong>Confira no texto oficial antes de publicar</strong>
+    <ul>{% for n in content.review_notes %}<li>{{ n }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  <form method="post" action="/items/{{ item.id }}/draft/save">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+
+    <section class="card">
+      <h3 class="sec">Resumo em linguagem simples</h3>
+      <p>{{ content.plain_summary }}</p>
+      {% if content.who_is_affected %}<p class="status-line"><strong>Quem é afetado:</strong> {{ content.who_is_affected|join('; ') }}</p>{% endif %}
+      {% if content.practical_impact %}<p class="status-line"><strong>Na prática:</strong> {{ content.practical_impact|join('; ') }}</p>{% endif %}
+    </section>
+
+    <section class="card">
+      <h3 class="sec">Carrossel ({{ content.carousel|length }} slides)</h3>
+      <label class="lbl" for="headline">Gancho</label>
+      <input id="headline" class="fld" name="headline" value="{{ content.headline }}">
+      {% for s in content.carousel %}
+      <div class="slide">
+        <div class="slide-n">Slide {{ loop.index }}</div>
+        <input class="fld" name="slide_title_{{ loop.index0 }}" value="{{ s.title }}" aria-label="Título do slide {{ loop.index }}">
+        <textarea class="fld" rows="3" name="slide_body_{{ loop.index0 }}" aria-label="Texto do slide {{ loop.index }}">{{ s.body }}</textarea>
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="card">
+      <h3 class="sec">Roteiro do reel</h3>
+      <label class="lbl" for="reel_hook">Gancho (primeiros 3 segundos)</label>
+      <input id="reel_hook" class="fld" name="reel_hook" value="{{ content.reel.hook }}">
+      {% for sc in content.reel.scenes %}
+      <div class="slide">
+        <div class="slide-n">Cena {{ loop.index }}</div>
+        <label class="lbl" for="sn{{ loop.index0 }}">Narração</label>
+        <textarea id="sn{{ loop.index0 }}" class="fld" rows="3" name="scene_narration_{{ loop.index0 }}">{{ sc.narration }}</textarea>
+        <label class="lbl" for="st{{ loop.index0 }}">Texto na tela</label>
+        <input id="st{{ loop.index0 }}" class="fld" name="scene_text_{{ loop.index0 }}" value="{{ sc.on_screen_text }}">
+      </div>
+      {% endfor %}
+      <label class="lbl" for="reel_cta">Chamada final</label>
+      <input id="reel_cta" class="fld" name="reel_cta" value="{{ content.reel.cta }}">
+    </section>
+
+    <section class="card">
+      <h3 class="sec">Legenda do Instagram</h3>
+      <textarea id="caption" class="fld" rows="8" name="caption">{{ content.caption }}</textarea>
+      <label class="lbl" for="hashtags">Hashtags</label>
+      <input id="hashtags" class="fld" name="hashtags" value="{{ content.hashtags|join(' ') }}">
+      <p class="status-line">Legenda completa, com fonte e link, como será usada:</p>
+      <div id="fullcap" class="full-text">{{ full_caption }}</div>
+      <p><button type="button" class="btn small" data-copy="fullcap">Copiar legenda completa</button></p>
+    </section>
+
+    <section class="card">
+      <h3 class="sec">Status do WhatsApp</h3>
+      <textarea id="wa" class="fld" rows="4" name="whatsapp_status">{{ content.whatsapp_status }}</textarea>
+      <p><button type="button" class="btn small" data-copy="wa">Copiar texto do Status</button></p>
+    </section>
+
+    <section class="card">
+      <button class="btn" type="submit" style="width:100%">Salvar alterações</button>
+    </section>
+  </form>
+
+    <section class="card" id="artes">
+      <h3 class="sec">Artes para postar</h3>
+      {% if art_files %}
+      <div class="art-grid">
+        {% for f in art_files %}<a href="/items/{{ item.id }}/art/{{ f }}" download="{{ f }}"><img src="/items/{{ item.id }}/art/{{ f }}" alt="Arte {{ f }}" loading="lazy"></a>{% endfor %}
+      </div>
+      <p><a class="btn small" href="/items/{{ item.id }}/art.zip">Baixar todas (.zip)</a></p>
+      <p class="status-line">Toque numa arte para baixar. O carrossel vai no feed (slide_01 a slide_NN) e a imagem "story" serve para o Status do WhatsApp e os stories.</p>
+      {% else %}
+      <p class="status-line">Salve as edições do texto e depois gere as artes. Elas usam o texto dos slides acima.</p>
+      {% endif %}
+      <form method="post" action="/items/{{ item.id }}/draft/art">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="lbl" for="photo">Foto de fundo</label>
+        <select id="photo" class="fld" name="photo">
+          <option value="auto">Automática (gira entre as suas fotos)</option>
+          {% for p in photos %}<option value="{{ p }}" {{ 'selected' if draft.photo == p else '' }}>Foto {{ loop.index }}</option>{% endfor %}
+        </select>
+        <button class="btn primary" type="submit" style="width:100%;margin-top:8px">{{ 'Gerar as artes de novo' if art_files else 'Gerar artes' }}</button>
+      </form>
+      {% if not photos %}<p class="status-line">Você ainda não enviou fotos: as artes usam um fundo verde. <a href="/marca">Enviar fotos de campo</a></p>{% endif %}
+    </section>
+
+
+  <section class="card">
+    {% if draft.status == DRAFT_READY %}
+      <form method="post" action="/items/{{ item.id }}/draft/approve">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="approve" value="1">
+        <button class="btn primary" type="submit" style="width:100%">Aprovar este conteúdo</button>
+      </form>
+      <p class="status-line">Salve as edições antes de aprovar. Gerado por IA a partir do texto oficial: sempre confira os pontos acima.</p>
+
+    {% elif draft.status in (DRAFT_APPROVED, DRAFT_SCHEDULED) %}
+      {% if draft.status == DRAFT_SCHEDULED %}
+        <p><strong>Agendado para {{ draft.scheduled_for|brdate }}</strong>{% if draft.scheduled_for == today %} (hoje){% endif %}</p>
+      {% else %}
+        <p><strong>Aprovado ✓</strong> <span class="status-line">falta escolher o dia</span></p>
+      {% endif %}
+      <form method="post" action="/items/{{ item.id }}/draft/schedule">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label class="lbl" for="day">{{ 'Mudar a data' if draft.status == DRAFT_SCHEDULED else 'Dia da publicação' }} (próxima data livre: {{ suggested|brdate }})</label>
+        <input id="day" class="fld" type="date" name="day" min="{{ today.isoformat() }}" value="{{ (draft.scheduled_for or suggested).isoformat() }}">
+        <button class="btn primary" type="submit" style="width:100%;margin-top:8px">{{ 'Salvar nova data' if draft.status == DRAFT_SCHEDULED else 'Agendar' }}</button>
+      </form>
+      {% if draft.publish_state == 'publishing' and not stuck %}
+        <p class="flash">Publicando no Instagram… leva cerca de 1 minuto. Esta página se atualiza sozinha.</p>
+      {% elif draft.publish_state == 'failed' %}
+        <p class="flash err">Não saiu no Instagram: {{ draft.publish_error }}</p>
+      {% elif draft.publish_state == 'uncertain' or stuck %}
+        <div class="card note">
+          <strong>Confirme no Instagram</strong>
+          <p>{{ draft.publish_error or 'A publicação ficou sem resposta.' }} Abra o perfil da HRBio e veja se o post está lá.</p>
+          <form method="post" action="/items/{{ item.id }}/draft/publish-resolve" style="margin-top:6px">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="published">
+            <button class="btn small" type="submit" style="width:100%">Sim, o post está lá</button>
+          </form>
+          <form method="post" action="/items/{{ item.id }}/draft/publish-resolve" style="margin-top:6px">
+            <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="action" value="retry">
+            <button class="btn small danger" type="submit" style="width:100%">Não está lá: liberar para tentar de novo</button>
+          </form>
+        </div>
+      {% endif %}
+      {% if ig.connected and draft.publish_state not in ('publishing', 'uncertain') %}
+        {% if draft.status == DRAFT_SCHEDULED and ig.auto_publish %}
+          <p class="status-line">O sistema publica sozinho em {{ draft.scheduled_for|brdate }} a partir das {{ '%02d'|format(ig.publish_hour) }}h (horário de Brasília).</p>
+        {% elif draft.status == DRAFT_SCHEDULED %}
+          <p class="status-line">Publicação automática desligada (tela Instagram): publique à mão e use "Já publiquei".</p>
+        {% endif %}
+        <form method="post" action="/items/{{ item.id }}/draft/publish-now" style="margin-top:8px" onsubmit="return confirm('Publicar agora no Instagram da HRBio?')">
+          <input type="hidden" name="csrf" value="{{ csrf }}">
+          <button class="btn primary" type="submit" style="width:100%">{{ 'Tentar publicar de novo' if draft.publish_state == 'failed' else 'Publicar agora no Instagram' }}</button>
+        </form>
+      {% elif not ig.connected %}
+        <p class="status-line">Para publicar daqui, <a href="/instagram">conecte o Instagram</a>.</p>
+      {% endif %}
+      <form method="post" action="/items/{{ item.id }}/draft/published" style="margin-top:8px">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn" type="submit" style="width:100%">Já publiquei</button>
+      </form>
+      {% if draft.status == DRAFT_SCHEDULED %}
+      <form method="post" action="/items/{{ item.id }}/draft/unschedule" style="margin-top:8px">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="btn" type="submit" style="width:100%">Tirar do calendário</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/items/{{ item.id }}/draft/approve" style="margin-top:8px">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="approve" value="0">
+        <button class="btn danger" type="submit" style="width:100%">Desfazer aprovação</button>
+      </form>
+
+    {% elif draft.status == DRAFT_PUBLISHED %}
+      <p><strong>Publicado ✓</strong> {% if draft.published_at %}<span class="status-line">em {{ draft.published_at.strftime('%d/%m/%Y') }}</span>{% endif %}
+        {% if draft.ig_permalink %}<br><a href="{{ draft.ig_permalink }}" target="_blank" rel="noopener noreferrer">Ver no Instagram ↗</a>{% endif %}</p>
+      {% if draft.publish_error %}<p class="status-line err">{{ draft.publish_error }}</p>{% endif %}
+    {% endif %}
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

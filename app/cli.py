@@ -20,6 +20,15 @@ def main(argv: list[str] | None = None) -> int:
     c = sub.add_parser("collect", help="busca novidades nas fontes oficiais")
     c.add_argument("--days", type=int, default=None, help="quantos dias para tras (padrao: COLLECT_LOOKBACK_DAYS)")
 
+    dl = sub.add_parser("daily", help="rotina diaria: normas muito relevantes de ontem (JSON, com o texto completo)")
+    dl.add_argument("--date", help="AAAA-MM-DD (padrao: ontem, horario de Brasilia)")
+    dl.add_argument("--max", type=int, default=3, help="maximo de candidatos (padrao 3)")
+
+    rc = sub.add_parser("render-card", help="gera artes, legenda e .zip a partir do JSON do card")
+    rc.add_argument("--item-id", type=int, required=True)
+    rc.add_argument("--content", required=True, help="arquivo JSON com o card (formato DraftContent)")
+    rc.add_argument("--out", required=True, help="pasta de saida")
+
     u = sub.add_parser("create-user", help="cria ou atualiza um usuario")
     u.add_argument("username")
     u.add_argument("--password", help="se omitido, pergunta no terminal")
@@ -37,6 +46,35 @@ def main(argv: list[str] | None = None) -> int:
             for r in run_default(session, settings, args.days):
                 status = f"ERRO: {r.error}" if r.error else "ok"
                 print(f"{r.source:8} lidos={r.fetched:4} novos={r.created:3}  {status}")
+        return 0
+
+    if args.cmd == "daily":
+        import json
+
+        from app.dailyrun import run_daily
+
+        print(json.dumps(run_daily(Session, settings, args.date, max_cards=args.max), ensure_ascii=False, indent=2))
+        return 0
+
+    if args.cmd == "render-card":
+        import json
+        from pathlib import Path
+
+        from app.brand_assets import BrandAssets
+        from app.cardpack import CardError, build_pack
+        from app.models import Item
+
+        with Session() as session:
+            item = session.get(Item, args.item_id)
+            if not item:
+                print(f"Item {args.item_id} não encontrado no banco.", file=sys.stderr)
+                return 2
+            try:
+                result = build_pack(item, Path(args.content).read_text(encoding="utf-8"), args.out, BrandAssets(settings.data_dir))
+            except (CardError, OSError) as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+        print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
 
     if args.cmd == "create-user":

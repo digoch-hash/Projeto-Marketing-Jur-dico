@@ -5,3 +5,8 @@ data/*.db
 data/*.sqlite
 .pytest_cache/
 .venv/
+
+# Arquivos enviados e artes geradas (ficam em DATA_DIR)
+data/photos/
+data/art/
+data/brand/

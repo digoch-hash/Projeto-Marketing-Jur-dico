@@ -22,7 +22,10 @@
     {% if item.issuer %}<div class="why">{{ item.issuer }}</div>{% endif %}
     {% if item.theme_list %}<div class="meta" style="margin-bottom:6px">{% for t in item.theme_list %}<span class="chip">{{ t }}</span>{% endfor %}</div>{% endif %}
     {% if item.relevance_reason %}<div class="why">Por que importa: {{ item.relevance_reason }} ({{ 'avaliado pelo Claude' if item.classified_by == 'claude' else 'avaliado por regras' }})</div>{% endif %}
-    <p><a class="btn primary" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Abrir norma oficial ↗</a></p>
+    <p style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn primary" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Abrir norma oficial ↗</a>
+      <a class="btn" href="/items/{{ item.id }}/draft">{% if draft %}Ver rascunho{% else %}Rascunho do post{% endif %}</a>
+    </p>
     {% if item.summary %}<div class="full-text">{{ item.summary }}</div>{% endif %}
     <p class="status-line">Situação: <strong>{{ STATUS_LABELS[item.status] }}</strong></p>
     <div class="actions">

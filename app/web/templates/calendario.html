@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Calendário{% endblock %}
+{% block body %}
+{% macro act(draft, item, label, path, extra='') %}
+<form method="post" action="/items/{{ item.id }}/draft/{{ path }}" style="margin:0;flex:1 1 40%">
+  <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next_url" value="/calendario">{{ extra|safe }}
+  <button class="btn small" type="submit" style="width:100%">{{ label }}</button>
+</form>
+{% endmacro %}
+<main>
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+  <h2 style="margin:6px 0 2px">Calendário</h2>
+  <p class="status-line" style="margin-top:0">Sem cota de posts: só publicamos quando há novidade relevante. O calendário {{ gap_text }}. Hoje é {{ today.strftime('%d/%m/%Y') }}.</p>
+
+  {% if overdue %}
+  <section class="card note">
+    <strong>Atrasados ({{ overdue|length }})</strong>
+    {% for draft, item in overdue %}
+    <div class="slide">
+      <div class="slide-n">era para {{ draft.scheduled_for|brdate }}</div>
+      <a href="/items/{{ item.id }}/draft">{{ item.title }}</a>
+      <div class="actions" style="margin-top:8px">
+        {{ act(draft, item, 'Já publiquei', 'published') }}
+        {{ act(draft, item, 'Tirar do calendário', 'unschedule') }}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h3 class="sec">Próximos 14 dias</h3>
+    {% if not agenda|selectattr('posts')|list %}<p class="status-line">Nenhum post agendado, e tudo bem. Quando aparecer uma norma relevante, o Radar avisa.</p>{% endif %}
+    {% for d in agenda %}
+    <div class="ag {{ d.kind }}">
+      <div class="ag-day">{{ d.label }}{% if d.is_today %} <span class="chip">hoje</span>{% endif %}</div>
+      <div class="ag-body">
+        {% if d.kind == 'post' %}
+          {% for draft, item in d.posts %}
+            <a href="/items/{{ item.id }}/draft"><strong>{{ item.title }}</strong></a>
+            <div class="actions" style="margin-top:6px">
+              {{ act(draft, item, 'Já publiquei', 'published') }}
+              {{ act(draft, item, 'Tirar', 'unschedule') }}
+            </div>
+          {% endfor %}
+        {% elif d.kind == 'free' %}
+          <span class="status-line">Livre</span>
+        {% else %}
+          <span class="status-line">Perto de outro post</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="card">
+    <h3 class="sec">Aprovados, sem data ({{ queue|length }})</h3>
+    {% for draft, item in queue %}
+    <div class="slide">
+      <a href="/items/{{ item.id }}/draft">{{ item.title }}</a>
+      <form method="post" action="/items/{{ item.id }}/draft/schedule" style="margin-top:8px">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="next_url" value="/calendario">
+        <input class="fld" type="date" name="day" min="{{ today.isoformat() }}" value="{{ suggestions[item.id].isoformat() }}" aria-label="Dia da publicação">
+        <button class="btn primary small" type="submit" style="width:100%;margin-top:6px">Agendar para o dia escolhido</button>
+      </form>
+    </div>
+    {% else %}
+      <p class="status-line">Nada esperando. No Radar, marque uma norma como "Quero postar", revise o rascunho e aprove.</p>
+    {% endfor %}
+  </section>
+
+  {% if published %}
+  <section class="card">
+    <h3 class="sec">Publicados recentemente</h3>
+    {% for draft, item in published %}
+      <p style="margin:6px 0"><span class="status-line">{{ draft.published_at.strftime('%d/%m') }}</span> · <a href="/items/{{ item.id }}/draft">{{ item.title }}</a></p>
+    {% endfor %}
+  </section>
+  {% endif %}
+</main>
+{% endblock %}
