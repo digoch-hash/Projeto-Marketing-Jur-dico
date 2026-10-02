@@ -128,6 +128,19 @@ Princípio: **só publicamos quando há algo relevante**. Não existe cota de po
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD` | Conta de e-mail que envia o aviso (porta 465 ou 587) |
 | `ALERT_EMAILS` | Quem recebe (separe por vírgula) |
 
+## Rotina diária sem servidor (alternativa à hospedagem)
+
+Para quem posta à mão e não quer manter um servidor ligado, uma **rotina agendada do Claude** faz o trabalho todo dia
+de manhã, usando só estes comandos (sem `ANTHROPIC_API_KEY`: quem escreve o card é o próprio Claude da rotina):
+
+```bash
+python -m app.cli daily                      # normas muito relevantes de ONTEM (JSON com o texto completo); --date AAAA-MM-DD
+python -m app.cli render-card --item-id N --content card.json --out pasta   # artes + legenda.txt + .zip
+```
+
+Cada execução cobre exatamente um dia (ontem, em Brasília), sem memória entre execuções: rodando todo dia, cada dia
+é coberto uma vez e nada se repete. Dia sem norma relevante: a rotina não entrega nada.
+
 ## Rodar localmente
 
 ```bash
