@@ -1,0 +1,21 @@
+<article class="card">
+  <div class="meta">
+    <span class="badge src">{{ SOURCE_LABELS.get(item.source, item.source) }}</span>
+    {% if item.doc_type %}<span class="badge">{{ item.doc_type }}</span>{% endif %}
+    <span>{{ item.published_at|brdate }}</span>
+    <span class="score {{ 'mid' if item.relevance < 60 else '' }}" title="Relevância estimada ({{ 'Claude' if item.classified_by == 'claude' else 'regras' }})">{{ item.relevance }}</span>
+  </div>
+  <h2><a href="/items/{{ item.id }}">{{ item.title }}</a></h2>
+  {% if item.theme_list %}<div class="meta" style="margin-bottom:4px">{% for t in item.theme_list %}<span class="chip">{{ t }}</span>{% endfor %}</div>{% endif %}
+  {% if item.relevance_reason %}<div class="why">{{ item.relevance_reason }}</div>{% endif %}
+  {% if item.summary and item.summary != item.title %}<p class="excerpt">{{ item.summary[:240] }}{% if item.summary|length > 240 %}…{% endif %}</p>{% endif %}
+  <div class="actions">
+    {% if item.status == 'new' %}
+      {{ status_btn(item, 'post', 'Quero postar', 'primary') }}
+      {{ status_btn(item, 'later', 'Depois', '') }}
+      {{ status_btn(item, 'ignored', 'Ignorar', 'danger') }}
+    {% else %}
+      {{ status_btn(item, 'new', 'Voltar para novas', '') }}
+    {% endif %}
+  </div>
+</article>

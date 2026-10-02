@@ -1,0 +1,40 @@
+{
+ "id": 1486922,
+ "protocolo": 2026001486922,
+ "nomeEntidade": "Fundação Estadual de Proteção Ambiental Henrique Luiz Roessler",
+ "nomeEntidadeCliente": "Diretoria da Presidência da FEPAM",
+ "tipoEntidade": "GOVERNO",
+ "nomeTipoMateria": "Atos Administrativos",
+ "nomeAssunto": "Atos Administrativos",
+ "nomeTipoAssunto": "Atos Administrativos",
+ "responsavelUnidade": "RENATO DAS CHAGAS E SILVA",
+ "responsavelOrgao": "RENATO DAS CHAGAS E SILVA",
+ "cargoResponsavelOrgao": "Diretor-Presidente",
+ "cargoResponsavelUnidade": "Diretor-Presidente",
+ "dataPublicacao": "01-10-2026",
+ "dataFormatada": "01 de outubro de 2026",
+ "conteudo": "<p style=\"text-align: center; \"> <b>PORTARIA FEPAM N°. 634/2026</b></p> <p style=\"\"><br> </p> <p style=\"\"><br> </p> <p style=\"\"><br> </p> <p style=\"text-align: justify; \"> <b>O PRESIDENTE DA FUNDAÇÃO ESTADUAL DE PROTEÇÃO AMBIENTAL - FEPAM</b><textopuro> , no uso de suas atribuições legais, e tendo em vista o que consta no Processo Administrativo referência n° </textopuro><textopuro> 26/0567-9000994-0 </textopuro><textopuro> . </textopuro></p> <p style=\"\"><br> </p> <p style=\"\"><b>RESOLVE:</b></p> <p style=\"\"><br> </p> <p style=\"text-align: justify; \"> <b>Art. 1°</b><textopuro> Designar os servidores abaixo relacionados, para atuarem como fiscais, titular e suplente, no âmbito do Termo de Cooperação Técnica que entre si celebram a FEPAM - Fundação Estadual de Proteção Ambiental Henrique Luís Roessler e o Instituto do Meio Ambiente do Estado de Santa Catarina - IMA. </textopuro></p> <p style=\"text-align: justify; \"> <br> </p> <ol type=\"a\"> <li><p style=\"text-align: justify; \"> <textopuro> Gabriel Henrique Gomes de Souza Freitas Teixeira - Identificador funcional 519186601 - titular; </textopuro></p></li> <li><p style=\"text-align: justify; \"> <textopuro> Monica Benetti Barbosa - Identificador funcional 304615001 - Suplente. </textopuro></p></li> </ol> <p style=\"text-align: justify; margin-left: 0.74in\"> <br> </p> <p style=\"text-align: justify; \"> <b>Art. 2°</b><textopuro> Esta Portaria entra em vigor na data de sua publicação. </textopuro></p> <p style=\"text-align: justify; \"> <br> </p> <p style=\"text-align: justify; \"> <br> </p> <p style=\"text-align: right; \"> <textopuro> Porto Alegre, 30 de setembro de 2026. </textopuro></p> <p style=\"text-align: justify; \"> <br> </p> <p style=\"text-align: justify; \"> <br> </p> <p style=\"text-align: justify; \"> <br> </p> <p style=\"text-align: center; \"> <b>Gabriel Simioni Ritter</b></p> <p style=\"text-align: center; \"> <b>Diretor-Presidente da FEPAM em exercício</b></p>",
+ "tipoDiario": "DOE",
+ "pagina": 118,
+ "edicaoDoDia": 1,
+ "endereco": {
+  "endereco": "Av. Borges de Medeiros",
+  "numero": "261",
+  "complemento": null,
+  "bairro": null,
+  "municipio": "Porto Alegre",
+  "siglaUf": "RS",
+  "cep": "90020021"
+ },
+ "enderecoUnidade": {
+  "endereco": "Av. Borges de Medeiros",
+  "numero": "261",
+  "complemento": null,
+  "bairro": null,
+  "municipio": "Porto Alegre",
+  "siglaUf": "RS",
+  "cep": "90020021"
+ },
+ "pdf": false,
+ "balancoPDF": false
+}

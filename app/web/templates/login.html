@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Entrar{% endblock %}
+{% block body %}
+<div class="login">
+  <div class="card">
+    <h2 style="margin-top:0">HRBio <span style="color:var(--green-500)">Radar de Normas</span></h2>
+    <form method="post" action="/login">
+      <label for="u">Usuário</label>
+      <input id="u" name="username" autocomplete="username" autocapitalize="none" required autofocus>
+      <label for="p">Senha</label>
+      <input id="p" name="password" type="password" autocomplete="current-password" required>
+      {% if error %}<p class="err">{{ error }}</p>{% endif %}
+      <p><button class="btn primary" type="submit" style="width:100%">Entrar</button></p>
+    </form>
+  </div>
+</div>
+{% endblock %}

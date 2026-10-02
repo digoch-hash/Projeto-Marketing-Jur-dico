@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% macro status_btn(item, to, label, kind) %}
+<form method="post" action="/items/{{ item.id }}/status">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="new_status" value="{{ to }}">
+  <input type="hidden" name="next_url" value="/items/{{ item.id }}">
+  <button class="btn small {{ kind }}" type="submit">{{ label }}</button>
+</form>
+{% endmacro %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block body %}
+<main>
+  <p><a href="/">← Voltar</a></p>
+  <article class="card">
+    <div class="meta">
+      <span class="badge src">{{ SOURCE_LABELS.get(item.source, item.source) }}</span>
+      {% if item.doc_type %}<span class="badge">{{ item.doc_type }}</span>{% endif %}
+      <span>{{ item.published_at|brdate }}</span>
+      <span class="score">{{ item.relevance }}</span>
+    </div>
+    <h2 style="font-size:1.2rem">{{ item.title }}</h2>
+    {% if item.issuer %}<div class="why">{{ item.issuer }}</div>{% endif %}
+    {% if item.theme_list %}<div class="meta" style="margin-bottom:6px">{% for t in item.theme_list %}<span class="chip">{{ t }}</span>{% endfor %}</div>{% endif %}
+    {% if item.relevance_reason %}<div class="why">Por que importa: {{ item.relevance_reason }} ({{ 'avaliado pelo Claude' if item.classified_by == 'claude' else 'avaliado por regras' }})</div>{% endif %}
+    <p><a class="btn primary" href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Abrir norma oficial ↗</a></p>
+    {% if item.summary %}<div class="full-text">{{ item.summary }}</div>{% endif %}
+    <p class="status-line">Situação: <strong>{{ STATUS_LABELS[item.status] }}</strong></p>
+    <div class="actions">
+      {% if item.status == 'new' %}
+        {{ status_btn(item, 'post', 'Quero postar', 'primary') }}
+        {{ status_btn(item, 'later', 'Depois', '') }}
+        {{ status_btn(item, 'ignored', 'Ignorar', 'danger') }}
+      {% else %}
+        {{ status_btn(item, 'new', 'Voltar para novas', '') }}
+      {% endif %}
+    </div>
+  </article>
+</main>
+{% endblock %}

@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% macro status_btn(item, to, label, kind) %}
+<form method="post" action="/items/{{ item.id }}/status">
+  <input type="hidden" name="csrf" value="{{ csrf }}">
+  <input type="hidden" name="new_status" value="{{ to }}">
+  <input type="hidden" name="next_url" value="{{ request.url.path }}{% if request.url.query %}?{{ request.url.query }}{% endif %}">
+  <button class="btn small {{ kind }}" type="submit">{{ label }}</button>
+</form>
+{% endmacro %}
+{% block body %}
+<main>
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+
+  <nav class="tabs" aria-label="Situação">
+    {% for key, label in STATUS_LABELS.items() %}
+      <a class="tab {{ 'on' if status == key else '' }}" href="/?status={{ key }}&source={{ source }}&theme={{ theme }}&min_rel={{ min_rel }}">{{ TAB_LABELS[key] }} <small>{{ counts.get(key, 0) }}</small></a>
+    {% endfor %}
+  </nav>
+
+  <form class="filters" method="get" action="/">
+    <input type="hidden" name="status" value="{{ status }}">
+    <select name="source" aria-label="Fonte" onchange="this.form.submit()">
+      <option value="">Todas as fontes</option>
+      {% for key, label in SOURCE_LABELS.items() %}<option value="{{ key }}" {{ 'selected' if source == key else '' }}>{{ label }}</option>{% endfor %}
+    </select>
+    <select name="theme" aria-label="Tema" onchange="this.form.submit()">
+      <option value="">Todos os temas</option>
+      {% for t in THEMES %}<option value="{{ t }}" {{ 'selected' if theme == t else '' }}>{{ t }}</option>{% endfor %}
+    </select>
+    <select name="min_rel" class="full" aria-label="Relevância mínima" onchange="this.form.submit()">
+      {% for v, l in [(0,'Mostrar tudo'),(20,'Relevância ≥ 20'),(40,'Relevância ≥ 40 (padrão)'),(60,'Relevância ≥ 60'),(80,'Só as mais relevantes (≥ 80)')] %}
+        <option value="{{ v }}" {{ 'selected' if min_rel == v else '' }}>{{ l }}</option>
+      {% endfor %}
+    </select>
+    <noscript><button class="btn full">Filtrar</button></noscript>
+  </form>
+
+  {% for item in items %}{% include "_card.html" %}{% else %}
+    <div class="empty">Nada por aqui com esses filtros.<br>Tente baixar a relevância mínima ou rodar uma coleta.</div>
+  {% endfor %}
+
+  {% if pages > 1 %}
+  <div class="pager">
+    {% if page > 1 %}<a class="btn small" href="/?status={{ status }}&source={{ source }}&theme={{ theme }}&min_rel={{ min_rel }}&page={{ page - 1 }}">← Anteriores</a>{% else %}<span></span>{% endif %}
+    <span class="status-line">Página {{ page }} de {{ pages }}</span>
+    {% if page < pages %}<a class="btn small" href="/?status={{ status }}&source={{ source }}&theme={{ theme }}&min_rel={{ min_rel }}&page={{ page + 1 }}">Próximas →</a>{% else %}<span></span>{% endif %}
+  </div>
+  {% endif %}
+
+  <div class="status-line">
+    {% for src, r in last_run.items() %}
+      {{ SOURCE_LABELS.get(src, src) }}: {{ r.started_at.strftime('%d/%m %H:%M') }} UTC{% if r.error %} <span class="err">(falhou: {{ r.error }})</span>{% else %} ({{ r.created }} novas){% endif %}{% if not loop.last %} · {% endif %}
+    {% else %}Nenhuma coleta feita ainda.{% endfor %}
+  </div>
+  <form method="post" action="/collect" style="margin-top:8px">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <button class="btn" type="submit" style="width:100%">Buscar novidades agora</button>
+  </form>
+</main>
+{% endblock %}
