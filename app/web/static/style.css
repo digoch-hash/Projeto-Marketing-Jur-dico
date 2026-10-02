@@ -48,3 +48,12 @@ main{max-width:760px;margin:0 auto;padding:12px 16px 40px}
 .login label{display:block;font-size:.9rem;margin:12px 0 4px}
 .login input{width:100%;padding:12px;border:1px solid var(--line);border-radius:10px;font:inherit}
 .full-text{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.95rem;background:#fafbf7;border:1px solid var(--line);border-radius:10px;padding:12px}
+.note{background:#fff7dc;border-color:#ecd98a}
+.note ul{margin:6px 0 0;padding-left:20px}
+.sec{margin:0 0 8px;font-size:1rem}
+.lbl{display:block;font-size:.8rem;color:var(--muted);margin:10px 0 4px}
+.fld{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:#fff;margin:2px 0}
+textarea.fld{resize:vertical;line-height:1.4}
+.slide{background:#fafbf7;border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
+.slide-n{font-size:.75rem;font-weight:700;color:var(--green-700);margin-bottom:4px}
+.btn[disabled]{opacity:.5;cursor:not-allowed}

@@ -8,6 +8,7 @@ class Settings:
     secret_key: str
     anthropic_api_key: str | None
     anthropic_model: str
+    draft_model: str
     lookback_days: int
     user_agent: str
 
@@ -17,7 +18,8 @@ def load_settings() -> Settings:
         database_url=os.getenv("DATABASE_URL", "sqlite:///data/app.db"),
         secret_key=os.getenv("SECRET_KEY", "dev-only-change-me"),
         anthropic_api_key=os.getenv("ANTHROPIC_API_KEY") or None,
-        anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"),
+        anthropic_model=os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5"),
+        draft_model=os.getenv("ANTHROPIC_DRAFT_MODEL", "claude-opus-5-5"),
         lookback_days=int(os.getenv("COLLECT_LOOKBACK_DAYS", "7")),
         user_agent=os.getenv(
             "COLLECTOR_USER_AGENT",

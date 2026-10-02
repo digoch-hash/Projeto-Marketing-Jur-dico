@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Rascunho · {{ item.title }}{% endblock %}
+{% block head %}{% if draft and draft.status == DRAFT_GENERATING %}<meta http-equiv="refresh" content="5">{% endif %}{% endblock %}
+{% block body %}
+<main>
+  <p><a href="/items/{{ item.id }}">← Voltar para a norma</a></p>
+  {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
+  <article class="card">
+    <div class="meta"><span class="badge src">{{ SOURCE_LABELS.get(item.source, item.source) }}</span><span>{{ item.published_at|brdate }}</span></div>
+    <h2 style="font-size:1.1rem"><a href="/items/{{ item.id }}" style="display:block">{{ item.title }}</a></h2>
+    <p><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Abrir norma oficial ↗</a></p>
+
+    {% if not draft %}
+      <p>Ainda não há rascunho para este item.</p>
+    {% elif draft.status == DRAFT_GENERATING %}
+      <p class="flash">Gerando o rascunho… leva cerca de 1 minuto. Esta página se atualiza sozinha.</p>
+    {% elif draft.status == DRAFT_ERROR %}
+      <p class="flash err">Não foi possível gerar: {{ draft.error }}</p>
+    {% endif %}
+
+    {% if not draft or draft.status in (DRAFT_ERROR, DRAFT_READY, DRAFT_APPROVED) %}
+    <form method="post" action="/items/{{ item.id }}/draft/generate">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn {{ '' if content else 'primary' }}" type="submit" {{ '' if has_key else 'disabled' }}>{{ 'Gerar de novo (substitui este rascunho)' if content else 'Gerar rascunho' }}</button>
+      {% if not has_key %}<p class="status-line">Configure ANTHROPIC_API_KEY no servidor para gerar rascunhos.</p>{% endif %}
+    </form>
+    {% endif %}
+  </article>
+
+  {% if content %}
+  {% if content.review_notes %}
+  <section class="card note">
+    <strong>Confira no texto oficial antes de publicar</strong>
+    <ul>{% for n in content.review_notes %}<li>{{ n }}</li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  <form method="post" action="/items/{{ item.id }}/draft/save">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+
+    <section class="card">
+      <h3 class="sec">Resumo em linguagem simples</h3>
+      <p>{{ content.plain_summary }}</p>
+      {% if content.who_is_affected %}<p class="status-line"><strong>Quem é afetado:</strong> {{ content.who_is_affected|join('; ') }}</p>{% endif %}
+      {% if content.practical_impact %}<p class="status-line"><strong>Na prática:</strong> {{ content.practical_impact|join('; ') }}</p>{% endif %}
+    </section>
+
+    <section class="card">
+      <h3 class="sec">Carrossel ({{ content.carousel|length }} slides)</h3>
+      <label class="lbl" for="headline">Gancho</label>
+      <input id="headline" class="fld" name="headline" value="{{ content.headline }}">
+      {% for s in content.carousel %}
+      <div class="slide">
+        <div class="slide-n">Slide {{ loop.index }}</div>
+        <input class="fld" name="slide_title_{{ loop.index0 }}" value="{{ s.title }}" aria-label="Título do slide {{ loop.index }}">
+        <textarea class="fld" rows="3" name="slide_body_{{ loop.index0 }}" aria-label="Texto do slide {{ loop.index }}">{{ s.body }}</textarea>
+      </div>
+      {% endfor %}
+    </section>
+
+    <section class="card">
+      <h3 class="sec">Roteiro do reel</h3>
+      <label class="lbl" for="reel_hook">Gancho (primeiros 3 segundos)</label>
+      <input id="reel_hook" class="fld" name="reel_hook" value="{{ content.reel.hook }}">
+      {% for sc in content.reel.scenes %}
+      <div class="slide">
+        <div class="slide-n">Cena {{ loop.index }}</div>
+        <label class="lbl" for="sn{{ loop.index0 }}">Narração</label>
+        <textarea id="sn{{ loop.index0 }}" class="fld" rows="3" name="scene_narration_{{ loop.index0 }}">{{ sc.narration }}</textarea>
+        <label class="lbl" for="st{{ loop.index0 }}">Texto na tela</label>
+        <input id="st{{ loop.index0 }}" class="fld" name="scene_text_{{ loop.index0 }}" value="{{ sc.on_screen_text }}">
+      </div>
+      {% endfor %}
+      <label class="lbl" for="reel_cta">Chamada final</label>
+      <input id="reel_cta" class="fld" name="reel_cta" value="{{ content.reel.cta }}">
+    </section>
+
+    <section class="card">
+      <h3 class="sec">Legenda do Instagram</h3>
+      <textarea id="caption" class="fld" rows="8" name="caption">{{ content.caption }}</textarea>
+      <label class="lbl" for="hashtags">Hashtags</label>
+      <input id="hashtags" class="fld" name="hashtags" value="{{ content.hashtags|join(' ') }}">
+      <p class="status-line">Legenda completa, com fonte e link, como será usada:</p>
+      <div id="fullcap" class="full-text">{{ full_caption }}</div>
+      <p><button type="button" class="btn small" data-copy="fullcap">Copiar legenda completa</button></p>
+    </section>
+
+    <section class="card">
+      <h3 class="sec">Status do WhatsApp</h3>
+      <textarea id="wa" class="fld" rows="4" name="whatsapp_status">{{ content.whatsapp_status }}</textarea>
+      <p><button type="button" class="btn small" data-copy="wa">Copiar texto do Status</button></p>
+    </section>
+
+    <section class="card">
+      <button class="btn" type="submit" style="width:100%">Salvar alterações</button>
+    </section>
+  </form>
+
+  <section class="card">
+    {% if draft.status == DRAFT_APPROVED %}
+      <p><strong>Aprovado ✓</strong> {% if draft.approved_at %}<span class="status-line">em {{ draft.approved_at.strftime('%d/%m %H:%M') }} UTC</span>{% endif %}</p>
+      <form method="post" action="/items/{{ item.id }}/draft/approve">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="approve" value="0">
+        <button class="btn" type="submit" style="width:100%">Desfazer aprovação</button>
+      </form>
+    {% elif draft.status == DRAFT_READY %}
+      <form method="post" action="/items/{{ item.id }}/draft/approve">
+        <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="approve" value="1">
+        <button class="btn primary" type="submit" style="width:100%">Aprovar este conteúdo</button>
+      </form>
+      <p class="status-line">Salve as edições antes de aprovar. Gerado por IA a partir do texto oficial: sempre confira os pontos acima.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+</main>
+{% endblock %}

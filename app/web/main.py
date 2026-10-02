@@ -13,9 +13,12 @@ from sqlalchemy import func, select
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.collector import run_default
+from app.drafts import DraftContent, build_full_caption, run_draft_job, start_draft
 from app.config import Settings, load_settings
 from app.db import init_db, make_engine, make_session_factory
-from app.models import STATUSES, CollectRun, Item, User, utcnow
+from app.models import (
+    DRAFT_APPROVED, DRAFT_ERROR, DRAFT_GENERATING, DRAFT_READY, STATUSES, CollectRun, Draft, Item, User, utcnow,
+)
 from app.relevance import THEMES
 from app.security import new_csrf_token, verify_password
 
@@ -77,6 +80,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
 
     def render(request: Request, name: str, **ctx):
         ctx.update(csrf=csrf_token(request), user=ctx.get("user"))
+        ctx.setdefault("flash", request.session.pop("flash", None))
         return templates.TemplateResponse(request, name, ctx)
 
     # ------------------------------------------------------------------ login
@@ -140,7 +144,8 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             request, "index.html",
             user=user, items=items, total=total, status=status, source=source, theme=theme,
             min_rel=min_rel, page=page, pages=max(1, -(-total // PAGE_SIZE)), counts=counts,
-            last_run=last_run, flash=request.session.pop("flash", None),
+            last_run=last_run,
+            drafts={d.item_id: d for d in db.scalars(select(Draft).where(Draft.item_id.in_([i.id for i in items])))},
         )
 
     @app.get("/items/{item_id}")
@@ -148,11 +153,13 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         item = db.get(Item, item_id)
         if not item:
             raise HTTPException(404, "Item não encontrado")
-        return render(request, "detail.html", user=user, item=item)
+        draft = db.scalar(select(Draft).where(Draft.item_id == item_id))
+        return render(request, "detail.html", user=user, item=item, draft=draft)
 
     @app.post("/items/{item_id}/status")
     def set_status(
         request: Request,
+        background: BackgroundTasks,
         item_id: int,
         new_status: str = Form(...),
         next_url: str = Form("/"),
@@ -167,9 +174,105 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         item.status = new_status
         item.status_changed_at = utcnow()
         db.commit()
+        if new_status == "post" and settings.anthropic_api_key and not db.scalar(
+            select(Draft.id).where(Draft.item_id == item_id)
+        ):
+            if start_draft(db, item):
+                background.add_task(run_draft_job, session_factory, settings, item_id)
         if not next_url.startswith("/") or next_url.startswith("//"):
             next_url = "/"  # evita redirecionamento para outro site
         return RedirectResponse(next_url, status_code=303)
+
+    # --------------------------------------------------------------- rascunhos
+    def load_draft_page(db, item_id: int):
+        item = db.get(Item, item_id)
+        if not item:
+            raise HTTPException(404, "Item não encontrado")
+        draft = db.scalar(select(Draft).where(Draft.item_id == item_id))
+        return item, draft
+
+    @app.get("/items/{item_id}/draft")
+    def draft_page(request: Request, item_id: int, user: User = Depends(current_user), db=Depends(get_db)):
+        item, draft = load_draft_page(db, item_id)
+        content = None
+        if draft and draft.content:
+            content = DraftContent.model_validate_json(draft.content)
+        return render(
+            request, "draft.html", user=user, item=item, draft=draft, content=content,
+            full_caption=build_full_caption(item, content) if content else "",
+            has_key=bool(settings.anthropic_api_key),
+            DRAFT_GENERATING=DRAFT_GENERATING, DRAFT_READY=DRAFT_READY,
+            DRAFT_APPROVED=DRAFT_APPROVED, DRAFT_ERROR=DRAFT_ERROR,
+        )
+
+    @app.post("/items/{item_id}/draft/generate")
+    def draft_generate(
+        request: Request,
+        background: BackgroundTasks,
+        item_id: int,
+        csrf: str = Form(""),
+        user: User = Depends(current_user),
+        db=Depends(get_db),
+    ):
+        check_csrf(request, csrf)
+        item, _ = load_draft_page(db, item_id)
+        if not settings.anthropic_api_key:
+            request.session["flash"] = "Falta configurar ANTHROPIC_API_KEY no servidor para gerar rascunhos."
+        elif start_draft(db, item):
+            background.add_task(run_draft_job, session_factory, settings, item_id)
+        else:
+            request.session["flash"] = "Já existe uma geração em andamento para este item."
+        return RedirectResponse(f"/items/{item_id}/draft", status_code=303)
+
+    @app.post("/items/{item_id}/draft/save")
+    async def draft_save(
+        request: Request, item_id: int, user: User = Depends(current_user), db=Depends(get_db)
+    ):
+        form = await request.form()
+        check_csrf(request, str(form.get("csrf", "")))
+        _, draft = load_draft_page(db, item_id)
+        if not draft or not draft.content:
+            raise HTTPException(400, "Não há rascunho para salvar")
+        content = DraftContent.model_validate_json(draft.content)
+        content.headline = str(form.get("headline", content.headline)).strip()
+        content.caption = str(form.get("caption", content.caption)).strip()
+        content.whatsapp_status = str(form.get("whatsapp_status", content.whatsapp_status)).strip()
+        content.hashtags = [t.strip("# ") for t in str(form.get("hashtags", "")).replace(",", " ").split() if t.strip("# ")]
+        for i, slide in enumerate(content.carousel):
+            slide.title = str(form.get(f"slide_title_{i}", slide.title)).strip()
+            slide.body = str(form.get(f"slide_body_{i}", slide.body)).strip()
+        content.reel.hook = str(form.get("reel_hook", content.reel.hook)).strip()
+        content.reel.cta = str(form.get("reel_cta", content.reel.cta)).strip()
+        for i, scene in enumerate(content.reel.scenes):
+            scene.narration = str(form.get(f"scene_narration_{i}", scene.narration)).strip()
+            scene.on_screen_text = str(form.get(f"scene_text_{i}", scene.on_screen_text)).strip()
+        draft.content = content.model_dump_json()
+        if draft.status == DRAFT_APPROVED:  # editou depois de aprovar: precisa aprovar de novo
+            draft.status, draft.approved_at = DRAFT_READY, None
+        draft.updated_at = utcnow()
+        db.commit()
+        request.session["flash"] = "Alterações salvas."
+        return RedirectResponse(f"/items/{item_id}/draft", status_code=303)
+
+    @app.post("/items/{item_id}/draft/approve")
+    def draft_approve(
+        request: Request,
+        item_id: int,
+        approve: str = Form("1"),
+        csrf: str = Form(""),
+        user: User = Depends(current_user),
+        db=Depends(get_db),
+    ):
+        check_csrf(request, csrf)
+        _, draft = load_draft_page(db, item_id)
+        if not draft or draft.status not in (DRAFT_READY, DRAFT_APPROVED):
+            raise HTTPException(400, "Só dá para aprovar um rascunho pronto")
+        if approve == "1":
+            draft.status, draft.approved_at = DRAFT_APPROVED, utcnow()
+        else:
+            draft.status, draft.approved_at = DRAFT_READY, None
+        db.commit()
+        return RedirectResponse(f"/items/{item_id}/draft", status_code=303)
 
     # ----------------------------------------------------------------- coleta
     def _collect_job():

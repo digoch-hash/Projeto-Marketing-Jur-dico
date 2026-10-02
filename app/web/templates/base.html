@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#1f3a1a">
   <title>{% block title %}Radar de Normas{% endblock %} · HRBio</title>
   <link rel="stylesheet" href="/static/style.css">
+  {% block head %}{% endblock %}
 </head>
 <body>
 {% if user %}
@@ -18,5 +19,11 @@
 </header>
 {% endif %}
 {% block body %}{% endblock %}
+<script>
+document.addEventListener("click",function(e){var b=e.target.closest("[data-copy]");if(!b)return;
+var src=document.getElementById(b.dataset.copy);var t=src.value!==undefined?src.value:src.innerText;
+var done=function(){var o=b.textContent;b.textContent="Copiado ✓";setTimeout(function(){b.textContent=o},1500)};
+if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(done)}else{var a=document.createElement("textarea");a.value=t;document.body.appendChild(a);a.select();document.execCommand("copy");a.remove();done()}});
+</script>
 </body>
 </html>

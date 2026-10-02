@@ -65,3 +65,26 @@ class CollectRun(Base):
     fetched: Mapped[int] = mapped_column(Integer, default=0)
     created: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str] = mapped_column(String(500), default="")
+
+
+DRAFT_GENERATING = "generating"
+DRAFT_READY = "draft"
+DRAFT_APPROVED = "approved"
+DRAFT_ERROR = "error"
+
+
+class Draft(Base):
+    """Pacote de conteudo gerado a partir de um item: carrossel, reel, legenda e status do WhatsApp."""
+
+    __tablename__ = "drafts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    item_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(16), default=DRAFT_GENERATING)
+    content: Mapped[str] = mapped_column(Text, default="")  # JSON do DraftContent
+    error: Mapped[str] = mapped_column(String(500), default="")
+    model: Mapped[str] = mapped_column(String(64), default="")
+    generations: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

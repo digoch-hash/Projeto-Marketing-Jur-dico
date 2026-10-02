@@ -3,8 +3,9 @@
 Sistema web para acompanhar o que saiu de novo nas fontes oficiais de meio ambiente (RS em primeiro
 lugar), separar o que importa para os clientes da HRBio e decidir o que vira post no Instagram.
 
-**Fase 1 (esta entrega):** coletar → filtrar por relevância → lista de novidades no celular.
-Resumos/roteiros, artes, publicação e métricas entram nas próximas fases.
+**Fase 1:** coletar → filtrar por relevância → lista de novidades no celular.
+**Fase 2:** ao marcar "Quero postar", o sistema gera o rascunho do conteúdo para você revisar e aprovar.
+Artes, publicação, calendário e métricas entram nas próximas fases.
 
 ## O que já funciona
 
@@ -20,6 +21,21 @@ Com `ANTHROPIC_API_KEY`, o Claude refina a nota dos candidatos e escreve o "por 
 sem a chave, funcionam só as regras de palavras-chave.
 
 Na tela, cada novidade pode ser marcada como **Quero postar**, **Depois** ou **Ignorar**.
+
+## Rascunho do post (fase 2)
+
+Ao marcar **Quero postar** (ou no botão **Gerar rascunho**), o sistema:
+
+1. busca o **texto completo** do ato na fonte oficial (para resoluções do CONSEMA, o Claude lê o próprio PDF);
+2. pede ao Claude um pacote com **carrossel (6–8 slides), roteiro de reel, legenda, texto para o Status do
+   WhatsApp e hashtags**, sempre com número da norma, link oficial e chamada para a HRBio;
+3. mostra no topo **"Confira no texto oficial antes de publicar"**: os pontos que a IA não conseguiu
+   confirmar (datas, prazos, trechos interpretados). O Claude só pode usar fatos que estão no texto;
+4. você edita qualquer campo, copia a legenda ou o Status com um toque e **aprova**.
+   Editar depois de aprovar cancela a aprovação.
+
+Nada é publicado automaticamente. O rascunho usa `ANTHROPIC_DRAFT_MODEL` (padrão `claude-opus-5-5`) com
+`fallbacks` ligado, e o filtro de relevância usa `ANTHROPIC_MODEL` (padrão `claude-haiku-4-5`, bem mais barato).
 
 ## Rodar localmente
 
@@ -61,8 +77,7 @@ SQLite por padrão (`data/app.db`). Para PostgreSQL, defina `DATABASE_URL`
 
 ## Próximas fases
 
-1. Gerador de rascunhos (resumo, legenda, roteiro de reel, texto de carrossel, link da norma e chamada
-   para a HRBio) com aprovação.
+1. ~~Gerador de rascunhos~~ (feito).
 2. Calendário editorial (novo → rascunho → aprovado → publicado), um post dia sim, dia não.
 3. Artes com a identidade visual da HRBio e publicação no Instagram só depois do seu OK.
 4. Reels em vídeo, métricas (alcance, compartilhamentos), avisos por WhatsApp e demais fontes.

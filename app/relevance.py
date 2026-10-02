@@ -179,7 +179,7 @@ class ClaudeClassifier:
         try:
             msg = self.client.messages.create(
                 model=self.model,
-                max_tokens=300,
+                max_tokens=1000,
                 system=SYSTEM_PROMPT,
                 messages=[{"role": "user", "content": user}],
             )
