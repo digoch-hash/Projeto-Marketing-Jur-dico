@@ -16,6 +16,8 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 PHOTO_MAX_SIDE = 2400
 THUMB_SIDE = 480
 LOGO_MAX_W = 1600
+LOGO_KINDS = ('escuro', 'claro')
+DEFAULT_LOGO_DIR = Path(__file__).parent / 'art' / 'brand'
 
 Image.MAX_IMAGE_PIXELS = 80_000_000  # recusa imagens gigantes (protecao contra decompression bomb)
 
@@ -43,7 +45,7 @@ class BrandAssets:
         self.root = Path(data_dir)
         self.photos = self.root / "photos"
         self.thumbs = self.photos / "thumbs"
-        self.logo_path = self.root / "brand" / "logo.png"
+        self.logo_dir = self.root / "brand"
         self.art_root = self.root / "art"
 
     # ----------------------------------------------------------------- fotos
@@ -88,15 +90,38 @@ class BrandAssets:
         return photos[seed % len(photos)] if photos else None
 
     # ------------------------------------------------------------------ logo
-    def save_logo(self, raw: bytes) -> None:
+    # "escuro" = logo de texto branco, para fundo escuro (as artes); "claro" = texto escuro, para fundo claro.
+    # O que voce envia na tela Marca vale mais que o logo que ja vem no sistema.
+    def _logo_file(self, kind: str) -> Path | None:
+        if kind not in LOGO_KINDS:
+            return None
+        for path in (self.logo_dir / f"logo_{kind}.png", DEFAULT_LOGO_DIR / f"logo_{kind}.png"):
+            if path.is_file():
+                return path
+        return None
+
+    def logo_file(self, kind: str) -> Path | None:
+        return self._logo_file(kind)
+
+    def is_custom_logo(self, kind: str) -> bool:
+        return kind in LOGO_KINDS and (self.logo_dir / f"logo_{kind}.png").is_file()
+
+    def save_logo(self, raw: bytes, kind: str) -> None:
+        if kind not in LOGO_KINDS:
+            raise AssetError("Tipo de logo inválido.")
         img = _open_image(raw).convert("RGBA")
         if img.width > LOGO_MAX_W:
             img = img.resize((LOGO_MAX_W, int(img.height * LOGO_MAX_W / img.width)), Image.LANCZOS)
-        self.logo_path.parent.mkdir(parents=True, exist_ok=True)
-        img.save(self.logo_path, "PNG")
+        self.logo_dir.mkdir(parents=True, exist_ok=True)
+        img.save(self.logo_dir / f"logo_{kind}.png", "PNG")
 
-    def load_logo(self) -> Image.Image | None:
-        return Image.open(self.logo_path).convert("RGBA") if self.logo_path.is_file() else None
+    def reset_logo(self, kind: str) -> None:
+        if self.is_custom_logo(kind):
+            (self.logo_dir / f"logo_{kind}.png").unlink()
+
+    def load_logo(self, kind: str) -> Image.Image | None:
+        path = self._logo_file(kind)
+        return Image.open(path).convert("RGBA") if path else None
 
     # ------------------------------------------------------------------ artes
     def art_dir(self, item_id: int) -> Path:

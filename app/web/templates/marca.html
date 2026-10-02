@@ -4,23 +4,29 @@
 <main>
   {% if flash %}<div class="flash">{{ flash }}</div>{% endif %}
   <h2 style="margin:6px 0 2px">Marca</h2>
-  <p class="status-line" style="margin-top:0">O logo e as fotos de campo usados nas artes dos posts.</p>
+  <p class="status-line" style="margin-top:0">Logos e fotos usados nas artes dos posts. Sem fotos, o sistema desenha uma paisagem verde de fundo.</p>
 
+  {% for kind, titulo, fundo, ajuda in [
+    ('escuro', 'Logo para fundo escuro (texto branco)', '#1c3114', 'É o usado nas artes, que têm fundo escuro.'),
+    ('claro', 'Logo para fundo claro (texto escuro)', '#f7f4e6', 'Só entra se o de fundo escuro não existir (vai sobre uma plaquinha clara).')] %}
   <section class="card">
-    <h3 class="sec">Logo</h3>
-    {% if has_logo %}
-      <div style="background:#f7f4e6;border-radius:12px;padding:12px;display:inline-block"><img src="/marca/logo" alt="Logo atual" style="max-width:240px;max-height:100px;display:block"></div>
-    {% else %}
-      <p class="status-line">Nenhum logo enviado: as artes mostram só o nome "HRBio Ambiental" em texto.</p>
-    {% endif %}
+    <h3 class="sec">{{ titulo }}</h3>
+    <div style="background:{{ fundo }};border-radius:12px;padding:14px;display:inline-block"><img src="/marca/logo/{{ kind }}" alt="{{ titulo }}" style="max-width:260px;max-height:100px;display:block"></div>
+    <p class="status-line">{{ 'Logo enviado por você.' if custom[kind] else 'Logo padrão do sistema.' }} {{ ajuda }}</p>
     <form method="post" action="/marca/logo" enctype="multipart/form-data">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <label class="lbl" for="logo">Enviar o logo (PNG com fundo transparente é o ideal)</label>
-      <input id="logo" class="fld" type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
-      <button class="btn primary" type="submit" style="width:100%;margin-top:8px">Enviar logo</button>
+      <input type="hidden" name="csrf" value="{{ csrf }}"><input type="hidden" name="tipo" value="{{ kind }}">
+      <label class="lbl" for="logo_{{ kind }}">Trocar por outro arquivo (PNG com fundo transparente é o ideal)</label>
+      <input id="logo_{{ kind }}" class="fld" type="file" name="logo" accept="image/png,image/jpeg,image/webp" required>
+      <button class="btn small" type="submit" style="width:100%;margin-top:8px">Enviar</button>
     </form>
-    <p class="status-line">O logo aparece sobre uma plaquinha clara no canto da arte, então pode ser o de texto escuro.</p>
+    {% if custom[kind] %}
+    <form method="post" action="/marca/logo/{{ kind }}/restaurar" style="margin-top:6px">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <button class="btn small" type="submit" style="width:100%">Voltar ao logo padrão</button>
+    </form>
+    {% endif %}
   </section>
+  {% endfor %}
 
   <section class="card">
     <h3 class="sec">Fotos de campo ({{ photos|length }})</h3>

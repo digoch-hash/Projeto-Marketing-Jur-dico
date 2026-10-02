@@ -64,9 +64,11 @@ O visual segue os stories da marca: foto escurecida, título grande em Montserra
 linha em verde-limão, traço vertical fino e painel verde-escuro arredondado. O texto sempre cabe na arte
 (a fonte diminui sozinha e, no limite, corta com "…"). Toque numa arte para baixar, ou baixe tudo em `.zip`.
 
-A tela **Marca** (link no rodapé) recebe o **logo** (PNG, de preferência com fundo transparente) e as **fotos de
-campo** da HRBio (JPG, PNG ou WEBP, até 25 MB cada). A foto de fundo é automática (gira entre as suas fotos) ou
-escolhida por rascunho. Sem fotos, as artes usam um fundo verde; sem logo, aparece o nome "HRBio Ambiental".
+Os **logos da HRBio já vêm no sistema** (`app/art/brand/`): o de texto branco entra direto sobre a arte escura e o
+de texto escuro só é usado, sobre uma plaquinha clara, se o outro faltar. A tela **Marca** (link no rodapé) permite
+trocá-los (e voltar ao padrão) e receber **fotos de campo** (JPG, PNG ou WEBP, até 25 MB). Com fotos, o fundo é
+automático (gira entre elas) ou escolhido por rascunho. **Sem fotos, o sistema desenha uma paisagem verde** (colinas
+em camadas com neblina, em 4 climas: manhã, fim de tarde, vale e floresta), sempre igual para o mesmo item.
 Editar o texto do rascunho apaga as artes antigas, para nunca sair arte desatualizada.
 
 Arquivos enviados e artes ficam em `DATA_DIR` (padrão `data/`), fora do banco e fora do Git.

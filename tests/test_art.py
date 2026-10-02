@@ -125,11 +125,43 @@ def test_foto_automatica_e_estavel_e_gira(tmp_path):
     assert {a.pick_photo(0), a.pick_photo(1)} == {n1, n2}
 
 
-def test_logo_e_artes_e_zip(tmp_path):
+def test_logos_padrao_vem_no_sistema_e_o_enviado_tem_prioridade(tmp_path):
     a = BrandAssets(tmp_path)
-    assert a.load_logo() is None
-    a.save_logo(png_bytes((3000, 1000), mode="RGBA", color=(0, 0, 0, 0)))
-    assert a.load_logo().width == 1600
+    escuro, claro = a.load_logo("escuro"), a.load_logo("claro")
+    assert escuro is not None and claro is not None and not a.is_custom_logo("escuro")
+
+    def opaque_right_half(img):
+        w, h = img.size
+        px = img.load()
+        return [px[x, y][:3] for x in range(w // 2 + 50, w, 9) for y in range(0, h, 9) if px[x, y][3] > 250]
+
+    assert opaque_right_half(escuro) and all(min(c) > 235 for c in opaque_right_half(escuro))  # texto branco
+    assert opaque_right_half(claro) and sum(max(c) < 90 for c in opaque_right_half(claro)) > 20  # texto escuro
+
+    a.save_logo(png_bytes((3000, 1000), mode="RGBA", color=(0, 0, 0, 0)), "escuro")
+    assert a.is_custom_logo("escuro") and a.load_logo("escuro").width == 1600  # o enviado vale mais
+    a.reset_logo("escuro")
+    assert not a.is_custom_logo("escuro") and a.load_logo("escuro").size == escuro.size
+    with pytest.raises(AssetError, match="inválido"):
+        a.save_logo(png_bytes(), "../x")
+    assert a.load_logo("xyz") is None and a.logo_file("../x") is None
+
+
+def test_logo_de_texto_branco_vai_direto_e_o_escuro_usa_plaquinha():
+    base = Image.new("RGBA", (800, 400), (20, 40, 20, 255))
+    white_logo = Image.new("RGBA", (400, 150), (0, 0, 0, 0))  # margem transparente, como o logo real
+    white_logo.paste((255, 255, 255, 255), (200, 40, 380, 110))
+    dark_logo = Image.new("RGBA", (400, 150), (0, 0, 0, 0))
+    dark_logo.paste((0, 0, 0, 255), (200, 40, 380, 110))
+    direct, chip = base.copy(), base.copy()
+    render.place_logo(direct, (100, 100), white_logo, dark_logo)
+    render.place_logo(chip, (100, 100), None, dark_logo)
+    assert direct.getpixel((102, 150)) == (20, 40, 20, 255)  # sem plaquinha: o fundo continua aparecendo
+    assert chip.getpixel((102, 150))[:3] != (20, 40, 20)  # com plaquinha creme
+
+
+def test_artes_e_zip(tmp_path):
+    a = BrandAssets(tmp_path)
     imgs = {"slide_01": Image.new("RGB", (10, 10)), "story": Image.new("RGB", (10, 20))}
     assert a.save_art(3, imgs) == ["slide_01.png", "story.png"]
     with zipfile.ZipFile(io.BytesIO(a.art_zip(3))) as z:
@@ -168,11 +200,16 @@ def test_marca_exige_login_e_csrf(web, settings, session_factory):
 
 def test_enviar_logo_e_fotos_e_ver_na_tela(web):
     t = token(web)
-    web.post("/marca/logo", data={"csrf": t}, files={"logo": ("logo.png", png_bytes((400, 150), mode="RGBA"), "image/png")})
+    assert "Logo padrão do sistema" in web.get("/marca").text
+    page = web.post("/marca/logo", data={"csrf": t, "tipo": "escuro"},
+                    files={"logo": ("logo.png", png_bytes((400, 150), mode="RGBA"), "image/png")}).text
+    assert "Logo atualizado" in page and "Logo enviado por você" in page and "Voltar ao logo padrão" in page
+    assert web.get("/marca/logo/escuro").status_code == 200 and web.get("/marca/logo/claro").status_code == 200
+    assert web.get("/marca/logo/xyz").status_code == 404
+    assert "Voltou para o logo padrão" in web.post("/marca/logo/escuro/restaurar", data={"csrf": t}).text
     page = web.post("/marca/fotos", data={"csrf": t},
                     files=[("fotos", ("a.jpg", jpg_bytes(), "image/jpeg")), ("fotos", ("b.jpg", jpg_bytes(color=(9, 9, 9)), "image/jpeg"))]).text
     assert "2 foto(s) enviada(s)" in page and "Fotos de campo (2)" in page
-    assert web.get("/marca/logo").status_code == 200
     thumb = re.search(r'src="(/marca/fotos/[0-9a-f]{12}\.jpg\?thumb=1)"', page).group(1)
     assert web.get(thumb).headers["content-type"] == "image/jpeg"
 
@@ -181,7 +218,7 @@ def test_upload_invalido_mostra_mensagem_sem_derrubar(web):
     t = token(web)
     page = web.post("/marca/fotos", data={"csrf": t}, files=[("fotos", ("x.jpg", b"nao e imagem", "image/jpeg"))]).text
     assert "0 foto(s) enviada(s)" in page and "imagem válida" in page
-    page = web.post("/marca/logo", data={"csrf": t}, files={"logo": ("x.png", b"lixo", "image/png")}).text
+    page = web.post("/marca/logo", data={"csrf": t, "tipo": "escuro"}, files={"logo": ("x.png", b"lixo", "image/png")}).text
     assert "imagem válida" in page
 
 
@@ -238,3 +275,27 @@ def test_gerar_e_salvar_um_conjunto_com_foto_e_rapido(tmp_path):
     t = time.time()
     a.save_art(1, render_set(slides(7), "h", "s", "n", photo, None))
     assert time.time() - t < 20
+
+
+# ----------------------------------------------------- fundo de paisagem (sem fotos)
+@pytest.mark.parametrize("seed", [0, 1, 2, 3, 7])
+def test_paisagem_nao_tem_faixa_preta_entre_ceu_e_colinas(seed):
+    """Regressao: o ceu so ia ate o horizonte e, onde a colina descia, aparecia uma faixa preta."""
+    img = render.landscape((540, 675), seed).convert("L")
+    dark = sum(img.histogram()[:12])
+    assert dark / (img.width * img.height) < 0.001
+
+
+def test_paisagem_e_estavel_por_seed_e_varia_entre_seeds():
+    a1, a2, b = render.landscape((300, 375), 5), render.landscape((300, 375), 5), render.landscape((300, 375), 6)
+    assert a1.tobytes() == a2.tobytes() and a1.tobytes() != b.tobytes()
+
+
+def test_sem_foto_o_fundo_e_a_paisagem_e_o_texto_continua_legivel():
+    bg = render.make_background(POST_SIZE, None, seed=2)
+    assert bg.size == POST_SIZE
+    # area onde fica o texto (esquerda, meio): escura o bastante para o texto creme ter contraste
+    lum = bg.crop((100, 330, 700, 800)).convert("L")
+    from PIL import ImageStat
+
+    assert ImageStat.Stat(lum).mean[0] < 110

@@ -5,6 +5,7 @@ extranegrito com a ultima linha em verde-limao, traco fino vertical, paineis ver
 """
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import dataclass
 from pathlib import Path
@@ -113,27 +114,131 @@ def _vertical_gradient(size: tuple[int, int], top: int, bottom: int) -> Image.Im
     return grad.point(lambda v: int(top + (bottom - top) * v / 255))
 
 
+def _horizontal_gradient(size: tuple[int, int], left: int, right: int) -> Image.Image:
+    grad = Image.linear_gradient("L").rotate(90, expand=True).transpose(Image.FLIP_LEFT_RIGHT).resize(size)
+    return grad.point(lambda v: int(left + (right - left) * v / 255))
+
+
+# Paisagens geradas (sem fotos): cada paleta e uma hora do dia / clima, todas no verde da marca.
+PALETTES = [
+    dict(top=(22, 50, 34), horizon=(208, 222, 168), sun=(255, 244, 190),
+         ridges=[(150, 176, 128), (112, 148, 98), (78, 114, 72), (46, 82, 48), (26, 54, 32)]),      # manha com neblina
+    dict(top=(28, 38, 28), horizon=(230, 198, 138), sun=(255, 212, 150),
+         ridges=[(168, 158, 108), (124, 130, 84), (86, 102, 58), (54, 74, 40), (30, 48, 26)]),      # fim de tarde
+    dict(top=(14, 40, 44), horizon=(168, 206, 190), sun=(232, 248, 220),
+         ridges=[(120, 164, 150), (86, 132, 114), (56, 100, 82), (36, 72, 56), (20, 46, 36)]),      # vale azulado
+    dict(top=(10, 30, 20), horizon=(150, 184, 120), sun=(220, 240, 170),
+         ridges=[(98, 138, 86), (68, 108, 62), (46, 82, 44), (30, 58, 32), (18, 38, 22)]),          # floresta fechada
+]
+
+
+def _blend(c1: tuple[int, int, int], c2: tuple[int, int, int], t: float) -> tuple[int, int, int]:
+    return tuple(int(a + (b - a) * t) for a, b in zip(c1, c2))  # type: ignore[return-value]
+
+
+def landscape(size: tuple[int, int], seed: int = 0) -> Image.Image:
+    """Paisagem verde em camadas (colinas, neblina, sol e, as vezes, um rio). Determinista por `seed`."""
+    W, H = size
+    rnd = random.Random(seed)
+    pal = PALETTES[seed % len(PALETTES)]
+    horizon_y = H * 0.60
+
+    # ceu: escuro em cima, claro perto do horizonte
+    # (o gradiente cobre a imagem toda: abaixo do horizonte fica na cor do horizonte, sem faixa vazia entre colinas)
+    ramp = Image.linear_gradient("L").resize((W, int(horizon_y)))
+    mask = Image.new("L", size, 255)
+    mask.paste(ramp.point(lambda v: int(255 * (v / 255) ** 1.7)), (0, 0))
+    img = Image.composite(Image.new("RGB", size, pal["horizon"]), Image.new("RGB", size, pal["top"]), mask)
+
+    # brilho do sol (calculado em baixa resolucao: o desfoque grande fica barato)
+    small = (W // 4, H // 4)
+    glow = Image.new("RGBA", small, (0, 0, 0, 0))
+    sx = int(small[0] * rnd.uniform(0.3, 0.8))
+    r = small[0] // 3
+    ImageDraw.Draw(glow).ellipse((sx - r, int(horizon_y / 4) - r, sx + r, int(horizon_y / 4) + r), fill=pal["sun"] + (150,))
+    glow = glow.filter(ImageFilter.GaussianBlur(small[0] // 7)).resize(size, Image.BICUBIC)
+    img = Image.alpha_composite(img.convert("RGBA"), glow).convert("RGB")
+
+    layers = len(pal["ridges"])
+    for i, color in enumerate(pal["ridges"]):
+        base = horizon_y + H * 0.065 * i
+        amp = H * (0.018 + 0.012 * i)
+        waves = [(rnd.uniform(0.6, 1.2) * (k + 1), rnd.uniform(0, 6.28), amp / (k + 1) ** 0.8) for k in range(4)]
+        pts = []
+        for x in range(0, W + 8, 8):
+            y = base + sum(a * math.sin(6.2832 * f * x / W + ph) for f, ph, a in waves)
+            pts.append((x, y))
+        layer = Image.new("RGBA", size, (0, 0, 0, 0))
+        d = ImageDraw.Draw(layer)
+        d.polygon(pts + [(W, H), (0, H)], fill=color + (255,))
+        if i >= 2:  # copas de arvores no contorno das colinas proximas (pequenas e suaves, para nao virarem "bolhas")
+            lighter, darker = _blend(color, (255, 255, 255), 0.07), _blend(color, (0, 0, 0), 0.16)
+            trees = Image.new("RGBA", size, (0, 0, 0, 0))
+            td = ImageDraw.Draw(trees)
+            for _ in range(700 + 250 * i):
+                px = rnd.randint(0, W)
+                py = base + sum(a * math.sin(6.2832 * f * px / W + ph) for f, ph, a in waves) + rnd.randint(-3, 60)
+                rr = rnd.randint(3 + i, 6 + 2 * i)
+                td.ellipse((px - rr, py - rr, px + rr, py + rr), fill=rnd.choice([lighter, darker, color]) + (255,))
+            layer = Image.alpha_composite(layer, trees.filter(ImageFilter.GaussianBlur(1.6)))
+        if i < 2:
+            layer = layer.filter(ImageFilter.GaussianBlur(2.5 - i))  # montanhas distantes mais suaves
+        img = Image.alpha_composite(img.convert("RGBA"), layer).convert("RGB")
+        if i < layers - 1:  # neblina entre as camadas
+            band = int(H * 0.08)
+            fog = Image.new("RGB", (W, band), pal["horizon"])
+            mask = _vertical_gradient((W, band), 0, 0).point(lambda v: 0)
+            ramp = Image.linear_gradient("L").resize((W, band))
+            mask = ramp.point(lambda v: int(70 * (1 - abs(v - 128) / 128) ** 1.2 * (1 - i / layers)))
+            img.paste(fog, (0, int(base + H * 0.01)), mask)
+
+    if seed % 2 == 0:  # rio sinuoso em primeiro plano
+        river = Image.new("RGBA", size, (0, 0, 0, 0))
+        rd = ImageDraw.Draw(river)
+        phase, steps = rnd.uniform(0, 6.28), 60
+        prev = None
+        for k in range(steps + 1):
+            t = k / steps
+            y = horizon_y + H * 0.10 + (H - horizon_y - H * 0.10) * t ** 1.35
+            x = W * (0.55 + 0.20 * t * math.sin(3.4 * t + phase))
+            w = 8 + 170 * t ** 1.7
+            if prev:
+                rd.polygon([(prev[0] - prev[2], prev[1]), (prev[0] + prev[2], prev[1]), (x + w, y), (x - w, y)],
+                           fill=_blend(pal["horizon"], pal["top"], 0.55) + (92,))
+            prev = (x, y, w)
+        img = Image.alpha_composite(img.convert("RGBA"), river.filter(ImageFilter.GaussianBlur(5))).convert("RGB")
+
+    # granulado fino, para parecer foto e nao vetor
+    # (ruido com a mesma semente da paisagem: gerar de novo da exatamente a mesma imagem)
+    noise = Image.frombytes("L", size, random.Random(seed).randbytes(W * H)).convert("RGB")
+    return Image.blend(img, noise, 0.016)
+
+
 def make_background(size: tuple[int, int], photo: Image.Image | None, seed: int = 0) -> Image.Image:
     if photo is not None:
         bg = ImageOps.fit(photo.convert("RGB"), size, Image.LANCZOS, centering=(0.5, 0.45))
-        tint = Image.new("RGB", size, GREEN_DEEP)
-        bg = Image.blend(bg, tint, 0.28)
+        bg = Image.blend(bg, Image.new("RGB", size, GREEN_DEEP), 0.28)
+        top, bottom = 110, 225
     else:
-        bg = Image.new("RGB", size, GREEN_DEEP)
-        rnd = random.Random(seed)
-        blobs = Image.new("RGB", size, GREEN_DEEP)
-        d = ImageDraw.Draw(blobs)
-        for _ in range(7):
-            r = rnd.randint(size[0] // 5, size[0] // 2)
-            cx, cy = rnd.randint(0, size[0]), rnd.randint(0, size[1])
-            d.ellipse((cx - r, cy - r, cx + r, cy + r), fill=rnd.choice([(40, 68, 28), (52, 82, 30), (34, 58, 24)]))
-        bg = Image.blend(blobs.filter(ImageFilter.GaussianBlur(120)), bg, 0.2)
+        bg = landscape(size, seed)
+        top, bottom = 50, 175  # a paisagem ja e escura: so reforca onde ficam o texto e o rodape
     shade = Image.new("RGB", size, INK)
-    # escurece mais embaixo, onde ficam o texto e o rodape
-    return Image.composite(shade, bg, _vertical_gradient(size, 110, 225))
+    bg = Image.composite(shade, bg, _vertical_gradient(size, top, bottom))
+    # o texto fica a esquerda: um escurecimento suave desse lado garante a leitura sobre qualquer fundo
+    return Image.composite(shade, bg, _horizontal_gradient(size, 95, 0))
 
 
 # ----------------------------------------------------------------------- logo
+def place_logo(img: Image.Image, xy: tuple[int, int], logo_dark_bg: Image.Image | None,
+               logo_light_bg: Image.Image | None, height: int = 96) -> None:
+    """Logo de texto branco direto sobre a arte escura; senao, o de texto escuro sobre uma plaquinha clara."""
+    if logo_dark_bg is not None:
+        w = int(logo_dark_bg.width * (height / logo_dark_bg.height))
+        img.alpha_composite(logo_dark_bg.convert("RGBA").resize((w, height), Image.LANCZOS), xy)
+    else:
+        img.alpha_composite(logo_chip(logo_light_bg, height), xy)
+
+
 def logo_chip(logo: Image.Image | None, height: int = 96) -> Image.Image:
     """Logo sobre uma plaquinha creme: o logo original tem texto escuro e precisa de fundo claro."""
     pad = 22
@@ -175,7 +280,7 @@ def render_post_slide(
     index: int,
     total: int,
     background: Image.Image,
-    logo: Image.Image | None,
+    logos: tuple[Image.Image | None, Image.Image | None],
 ) -> Image.Image:
     W, H = POST_SIZE
     img = background.copy().convert("RGBA")
@@ -184,7 +289,7 @@ def render_post_slide(
     cover = index == 0
 
     d.rectangle((58, 96, 62, H - 96), fill=LINE + (200,))  # traco vertical da marca
-    img.alpha_composite(logo_chip(logo), (MARGIN_X, 76))
+    place_logo(img, (MARGIN_X, 70), logos[0], logos[1])
 
     top = 330
     k_text, k_font, tracking = fit_kicker(kicker, text_w)
@@ -209,7 +314,8 @@ def render_post_slide(
 
 
 def render_story(
-    headline: str, text: str, kicker: str, footer: str, background: Image.Image, logo: Image.Image | None
+    headline: str, text: str, kicker: str, footer: str, background: Image.Image,
+    logos: tuple[Image.Image | None, Image.Image | None],
 ) -> Image.Image:
     W, H = STORY_SIZE
     img = background.copy().convert("RGBA")
@@ -217,7 +323,7 @@ def render_story(
     text_w = W - MARGIN_X - 90
 
     d.rectangle((58, 120, 62, H - 480), fill=LINE + (200,))
-    img.alpha_composite(logo_chip(logo, 110), (MARGIN_X, 110))
+    place_logo(img, (MARGIN_X, 104), logos[0], logos[1], height=116)
 
     top = 520
     k_text, k_font, tracking = fit_kicker(kicker, text_w, size=32)
@@ -250,16 +356,18 @@ def render_set(
     status_text: str,
     norm_label: str,
     photo: Image.Image | None,
-    logo: Image.Image | None,
+    logo_dark_bg: Image.Image | None = None,
+    logo_light_bg: Image.Image | None = None,
     seed: int = 0,
 ) -> dict[str, Image.Image]:
     """Todas as artes de um rascunho: slide_01.. (carrossel) e story."""
     out: dict[str, Image.Image] = {}
+    logos = (logo_dark_bg, logo_light_bg)
     post_bg = make_background(POST_SIZE, photo, seed)
     for i, (title, body) in enumerate(slides):
         kicker = "Novidade na legislação ambiental" if i == 0 else norm_label
-        out[f"slide_{i + 1:02d}"] = render_post_slide(title, body, kicker, i, len(slides), post_bg, logo)
+        out[f"slide_{i + 1:02d}"] = render_post_slide(title, body, kicker, i, len(slides), post_bg, logos)
     story_bg = make_background(STORY_SIZE, photo, seed + 1)
     out["story"] = render_story(headline, status_text, "Novidade na legislação ambiental",
-                                f"Fale com a HRBio\n{norm_label}", story_bg, logo)
+                                f"Fale com a HRBio\n{norm_label}", story_bg, logos)
     return out

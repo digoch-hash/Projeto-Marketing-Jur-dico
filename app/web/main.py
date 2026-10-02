@@ -211,7 +211,6 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             suggested=suggest_date(taken_dates(db, exclude_item_id=item_id), today_br()),
             today=today_br(),
             art_files=assets.list_art(item_id), photos=assets.list_photos(),
-            has_logo=assets.logo_path.is_file(),
         )
 
     @app.post("/items/{item_id}/draft/generate")
@@ -312,7 +311,8 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             status_text=content.whatsapp_status,
             norm_label=item.title,
             photo=assets.load_photo(chosen),
-            logo=assets.load_logo(),
+            logo_dark_bg=assets.load_logo('escuro'),
+            logo_light_bg=assets.load_logo('claro'),
             seed=item_id,
         )
         assets.save_art(item_id, images)
@@ -339,7 +339,10 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
     # --------------------------------------------------------------------- marca
     @app.get("/marca")
     def brand_page(request: Request, user: User = Depends(current_user)):
-        return render(request, "marca.html", user=user, photos=assets.list_photos(), has_logo=assets.logo_path.is_file())
+        return render(
+            request, "marca.html", user=user, photos=assets.list_photos(),
+            custom={k: assets.is_custom_logo(k) for k in ("escuro", "claro")},
+        )
 
     @app.post("/marca/logo")
     async def brand_logo(request: Request, user: User = Depends(current_user)):
@@ -349,10 +352,17 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         try:
             if not hasattr(upload, "read"):
                 raise AssetError("Escolha um arquivo de logo.")
-            assets.save_logo(await upload.read())
+            assets.save_logo(await upload.read(), str(form.get("tipo", "")))
             request.session["flash"] = "Logo atualizado."
         except AssetError as exc:
             request.session["flash"] = str(exc)
+        return RedirectResponse("/marca", status_code=303)
+
+    @app.post("/marca/logo/{kind}/restaurar")
+    def brand_logo_reset(request: Request, kind: str, csrf: str = Form(""), user: User = Depends(current_user)):
+        check_csrf(request, csrf)
+        assets.reset_logo(kind)
+        request.session["flash"] = "Voltou para o logo padrão."
         return RedirectResponse("/marca", status_code=303)
 
     @app.post("/marca/fotos")
@@ -385,11 +395,12 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
             raise HTTPException(404, "Foto não encontrada")
         return FileResponse(path, media_type="image/jpeg")
 
-    @app.get("/marca/logo")
-    def brand_logo_file(user: User = Depends(current_user)):
-        if not assets.logo_path.is_file():
+    @app.get("/marca/logo/{kind}")
+    def brand_logo_file(kind: str, user: User = Depends(current_user)):
+        path = assets.logo_file(kind)
+        if not path:
             raise HTTPException(404, "Sem logo")
-        return FileResponse(assets.logo_path, media_type="image/png")
+        return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
     # --------------------------------------------------------------- calendario
     @app.get("/calendario")
