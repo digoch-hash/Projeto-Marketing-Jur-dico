@@ -1,3 +1,5 @@
+import pytest
+
 from app.relevance import ClaudeClassifier, Classification, MIN_STORE, quick_score, score_item
 from app.sources.base import RawItem
 
@@ -109,3 +111,31 @@ def test_portaria_de_designacao_de_fiscais_e_ruido_mesmo_com_titulo_generico():
         doc_type="Portarias", issuer="Secretaria do Meio Ambiente e Infraestrutura",
     ))
     assert c.value < 40
+
+
+# ---- calibragem com atos reais (DOE/CONSEMA de 2026): quem decide postar depende disso
+REAIS = [
+    # (titulo, ementa/texto, tipo, orgao, deve ser "muito relevante"?)
+    ("Resolução CONSEMA 554/2026", "Altera a Resolução CONSEMA nº 512, de 08 de agosto de 2024, que dispõe sobre os procedimentos de Licenciamento Ambiental dos empreendimentos de irrigação.", "Resolução CONSEMA", "CONSEMA - Conselho Estadual do Meio Ambiente (RS)", True),
+    ("Resolução CONSEMA 551/2026", "Estabelece as diretrizes e os procedimentos para a recuperação de áreas mineradas (PRAD).", "Resolução CONSEMA", "CONSEMA - Conselho Estadual do Meio Ambiente (RS)", True),
+    ("Súmula da Diretriz Técnica FEPAM nº. 02/2017", "Objeto: realizada atualização da diretriz técnica de licenciamento ambiental", "Atos Administrativos", "Fundação Estadual de Proteção Ambiental", True),
+    ("Resolução CONSEMA 553/2026", "Altera Resolução 296/2015 que dispõe sobre a reformulação das composições das câmaras técnicas.", "Resolução CONSEMA", "CONSEMA", False),
+    ("SÚMULA DO TERMO DE COOPERAÇÃO MATA ATLÂNTICA - SEMA/FEPAM - MUNICÍPIO DE PICADA CAFÉ", "Termo de cooperação técnica para o Plano da Mata Atlântica e licenciamento", "Convênios", "Secretaria do Meio Ambiente e Infraestrutura", False),
+    ("AVISO SEMA - CRH/RS Nº 10/2026", "Segunda Chamada para Cadastramento de Entidades para o Processo Eleitoral do Comitê da Bacia Hidrográfica dos Rios Vacacai", "Atos Administrativos", "Secretaria do Meio Ambiente e Infraestrutura", False),
+    ("RENOVAÇÃO DE LICENÇA DE OPERAÇÃO COOPERATIVA REGIONAL", "Comunica a renovação de licença de operação LO nº 123/2026 emitida pela FEPAM", "Licença de Operação", "COOPERATIVA REGIONAL", False),
+    ("PORTARIA FEPAM N° 630/2026 Institui, em caráter permanente, o Grupo de Trabalho", "Institui grupo de trabalho para qualidade ambiental e licenciamento", "Atos Administrativos", "Fundação Estadual de Proteção Ambiental", False),
+]
+
+
+@pytest.mark.parametrize("title,text,doc_type,issuer,relevante", REAIS)
+def test_norma_que_muda_a_vida_do_cliente_passa_do_corte_de_aviso_e_o_resto_nao(title, text, doc_type, issuer, relevante):
+    value = score_item(item(title, text, doc_type, issuer)).value
+    assert (value >= 60) is relevante, f"{title}: {value}"
+    if not relevante:
+        assert value < 40  # nem aparece na lista padrao
+
+
+def test_resolucao_do_consema_vence_acordo_administrativo():
+    resolucao = score_item(item("Resolução CONSEMA 554/2026", "Licenciamento ambiental da irrigação", "Resolução CONSEMA", "CONSEMA")).value
+    acordo = score_item(item("Termo de cooperação técnica", "licenciamento ambiental", "Convênios", "Secretaria do Meio Ambiente")).value
+    assert resolucao > acordo + 20

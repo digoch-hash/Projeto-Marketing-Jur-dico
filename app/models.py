@@ -65,3 +65,46 @@ class CollectRun(Base):
     fetched: Mapped[int] = mapped_column(Integer, default=0)
     created: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str] = mapped_column(String(500), default="")
+
+
+DRAFT_GENERATING = "generating"
+DRAFT_READY = "draft"
+DRAFT_APPROVED = "approved"
+DRAFT_SCHEDULED = "scheduled"
+DRAFT_PUBLISHED = "published"
+DRAFT_ERROR = "error"
+
+
+class Draft(Base):
+    """Pacote de conteudo gerado a partir de um item: carrossel, reel, legenda e status do WhatsApp."""
+
+    __tablename__ = "drafts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    item_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(16), default=DRAFT_GENERATING)
+    content: Mapped[str] = mapped_column(Text, default="")  # JSON do DraftContent
+    error: Mapped[str] = mapped_column(String(500), default="")
+    model: Mapped[str] = mapped_column(String(64), default="")
+    generations: Mapped[int] = mapped_column(Integer, default=0)
+    started_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    scheduled_for: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    published_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    photo: Mapped[str | None] = mapped_column(String(200), nullable=True)  # foto de fundo escolhida para as artes
+    # publicacao automatica no Instagram: None | publishing | failed | uncertain
+    publish_state: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    publish_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    publish_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ig_media_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ig_permalink: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+
+class Setting(Base):
+    """Configuracoes que mudam pela tela (ex.: conexao com o Instagram). O token fica criptografado."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, default="")
