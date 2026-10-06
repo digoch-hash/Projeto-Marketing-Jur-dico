@@ -94,6 +94,7 @@ def test_erro_de_fonte_aparece_no_resultado(session_factory, cfg):
     out = run_daily(session_factory, cfg, today=TODAY, material=fake_material,
                     collect=lambda db, st, d: [RunResult("fepam", error="FEPAM fora do ar"), RunResult("consema")])
     assert out["fontes_com_erro"] == [{"fonte": "fepam", "erro": "FEPAM fora do ar"}]
+    assert [(f["fonte"], f["lidos"]) for f in out["fontes"]] == [("fepam", 0), ("consema", 0)]  # contagem p/ diagnostico
 
 
 # ------------------------------------------------------------------ pacote do card

@@ -71,6 +71,7 @@ def run_daily(session_factory, settings: Settings, date_arg: str | None = None, 
         return {
             "data_alvo": target.isoformat(),
             "lidos_no_dia": len(day_items),
+            "fontes": [{"fonte": r.source, "lidos": r.fetched, "novos": r.created, "erro": r.error} for r in results],
             "fontes_com_erro": errors,
             "candidatos": candidates,
             "talvez_titulos": [{"id": i.id, "titulo": i.title, "relevancia": i.relevance} for i in maybe],
