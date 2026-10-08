@@ -12,8 +12,15 @@ from PIL import Image
 CAPTION_END = "--- TEXTO DO STATUS DO WHATSAPP ---"
 
 
+STORY_NAMES = ("story", "story_convite")  # nesta ordem: resumo e depois o convite para o post
+
+
 def slide_names(pack_dir: Path) -> list[str]:
     return sorted(p.stem for p in pack_dir.glob("slide_*.png"))
+
+
+def story_names(pack_dir: Path) -> list[str]:
+    return [n for n in STORY_NAMES if (pack_dir / f"{n}.png").exists()]
 
 
 def read_caption(pack_dir: Path) -> str:
@@ -25,18 +32,28 @@ def make_jpegs(pack_dir: Path, out_dir: Path) -> list[Path]:
     """O Instagram so aceita JPEG. Devolve os arquivos na ordem dos slides."""
     out_dir.mkdir(parents=True, exist_ok=True)
     paths = []
-    for name in slide_names(pack_dir):
+    for name in slide_names(pack_dir) + story_names(pack_dir):
         dest = out_dir / f"{name}.jpg"
         Image.open(pack_dir / f"{name}.png").convert("RGB").save(dest, "JPEG", quality=92)
         paths.append(dest)
     return paths
 
 
-def publish_pack(client, pack_dir: str | Path, base_url: str, jpg_dir: str | Path) -> dict:
+def publish_pack(client, pack_dir: str | Path, base_url: str, jpg_dir: str | Path, *, stories: bool = True) -> dict:
+    """Publica o carrossel e, em seguida, os stories. Falha num story nao desfaz o post (ja esta no ar)."""
     pack = Path(pack_dir)
-    jpgs = make_jpegs(pack, Path(jpg_dir))
-    if not jpgs:
+    make_jpegs(pack, Path(jpg_dir))
+    slides = slide_names(pack)
+    if not slides:
         raise ValueError("A pasta não tem slides (slide_01.png...).")
-    urls = [f"{base_url.rstrip('/')}/{p.name}" for p in jpgs]
-    result = client.publish_carousel(urls, read_caption(pack))
-    return {"media_id": result.media_id, "link": result.permalink, "slides": len(urls)}
+    base = base_url.rstrip("/")
+    result = client.publish_carousel([f"{base}/{n}.jpg" for n in slides], read_caption(pack))
+    out = {"media_id": result.media_id, "link": result.permalink, "slides": len(slides), "stories": [], "stories_com_erro": []}
+    if stories:
+        for name in story_names(pack):
+            try:
+                client.publish_story(f"{base}/{name}.jpg")
+                out["stories"].append(name)
+            except Exception as exc:  # noqa: BLE001 - o post principal ja saiu; so avisa
+                out["stories_com_erro"].append({"story": name, "erro": str(exc)})
+    return out
