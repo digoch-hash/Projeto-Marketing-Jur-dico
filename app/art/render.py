@@ -359,8 +359,11 @@ def render_set(
     logo_dark_bg: Image.Image | None = None,
     logo_light_bg: Image.Image | None = None,
     seed: int = 0,
+    invite_story: bool = False,
 ) -> dict[str, Image.Image]:
-    """Todas as artes de um rascunho: slide_01.. (carrossel) e story."""
+    """Todas as artes de um rascunho: slide_01.. (carrossel) e story.
+
+    Com `invite_story`, sai tambem `story_convite`: um segundo story que manda o seguidor para o post do feed."""
     out: dict[str, Image.Image] = {}
     logos = (logo_dark_bg, logo_light_bg)
     post_bg = make_background(POST_SIZE, photo, seed)
@@ -370,4 +373,8 @@ def render_set(
     story_bg = make_background(STORY_SIZE, photo, seed + 1)
     out["story"] = render_story(headline, status_text, "Novidade na legislação ambiental",
                                 f"Fale com a HRBio\n{norm_label}", story_bg, logos)
+    if invite_story:
+        invite_bg = make_background(STORY_SIZE, photo, seed + 2)
+        out["story_convite"] = render_story(headline, "Saiu post novo no nosso feed, com o resumo completo e a fonte oficial. Confira!",
+                                            "Post novo no feed", f"Fale com a HRBio\n{norm_label}", invite_bg, logos)
     return out

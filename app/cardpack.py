@@ -34,6 +34,7 @@ def build_pack(item: Item, content_json: str, out_dir: str | Path, assets: Brand
         logo_dark_bg=assets.load_logo("escuro"),
         logo_light_bg=assets.load_logo("claro"),
         seed=item.id,
+        invite_story=True,
     )
     files = []
     for name, img in images.items():

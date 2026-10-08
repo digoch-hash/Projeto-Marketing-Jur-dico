@@ -103,14 +103,14 @@ def test_pacote_tem_artes_legenda_pontos_e_zip(session_factory, cfg, tmp_path):
         item = db.get(Item, add(db, 1, 90, title="Súmula da Diretriz Técnica FEPAM nº 02/2017"))
         result = build_pack(item, json.dumps(VALID), tmp_path / "pack", BrandAssets(cfg.data_dir))
     assert result["slides"] == 6
-    assert sorted(result["files"]) == sorted([f"slide_0{i}.png" for i in range(1, 7)] + ["story.png", "legenda.txt"])
+    assert sorted(result["files"]) == sorted([f"slide_0{i}.png" for i in range(1, 7)] + ["story.png", "story_convite.png", "legenda.txt"])
     legenda = (tmp_path / "pack" / "legenda.txt").read_text(encoding="utf-8")
     assert "Fonte oficial: Súmula da Diretriz Técnica FEPAM nº 02/2017" in legenda and "https://x/1" in legenda
     assert "PONTOS PARA CONFERIR" in legenda and "Confirmar a data de vigência" in legenda and "TEXTO DO STATUS" in legenda
     import zipfile
 
     with zipfile.ZipFile(result["zip"]) as z:
-        assert len(z.namelist()) == 8
+        assert len(z.namelist()) == 9
 
 
 def test_card_fora_do_formato_da_erro_claro(session_factory, cfg, tmp_path):
