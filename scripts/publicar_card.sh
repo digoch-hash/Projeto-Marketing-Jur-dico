@@ -9,7 +9,10 @@ set -euo pipefail
 PACK="${1:?Informe a pasta do card.}"
 ID="${2:?Informe o id da norma.}"
 DRY="${3:-}"
-PY="${PY:-python}"
+if [ -z "${PY:-}" ]; then   # usa o mesmo Python do pip (onde as dependencias foram instaladas); senao python3
+  PY="$(head -1 "$(command -v pip 2>/dev/null || echo /nonexistent)" 2>/dev/null | sed -n 's/^#!//p')"
+  [ -x "${PY:-/nonexistent}" ] || PY="$(command -v python3 || command -v python)"
+fi
 BR="${CARDS_BRANCH:-cards-publicos}"
 ORIGIN="${CARDS_ORIGIN:-$(git remote get-url origin)}"
 RAW_BASE="${CARDS_RAW_BASE:-https://raw.githubusercontent.com/digoch-hash/Projeto-Marketing-Jur-dico/$BR}"
