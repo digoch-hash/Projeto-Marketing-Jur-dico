@@ -29,6 +29,12 @@ def main(argv: list[str] | None = None) -> int:
     rc.add_argument("--content", required=True, help="arquivo JSON com o card (formato DraftContent)")
     rc.add_argument("--out", required=True, help="pasta de saida")
 
+    pp = sub.add_parser("publish-pack", help="publica o carrossel de um card JA APROVADO (usa INSTAGRAM_TOKEN e INSTAGRAM_USER_ID)")
+    pp.add_argument("--pack-dir", required=True, help="pasta gerada pelo render-card")
+    pp.add_argument("--base-url", required=True, help="endereco publico onde os .jpg estarao (sem o nome do arquivo)")
+    pp.add_argument("--jpg-dir", required=True, help="pasta onde gerar os .jpg (publique-os em --base-url)")
+    pp.add_argument("--prepare-only", action="store_true", help="so gera os .jpg, sem publicar")
+
     u = sub.add_parser("create-user", help="cria ou atualiza um usuario")
     u.add_argument("username")
     u.add_argument("--password", help="se omitido, pergunta no terminal")
@@ -75,6 +81,30 @@ def main(argv: list[str] | None = None) -> int:
                 print(str(exc), file=sys.stderr)
                 return 2
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    if args.cmd == "publish-pack":
+        import json
+        import os
+        from pathlib import Path
+
+        from app.instagram import InstagramClient, InstagramError
+        from app.postpack import make_jpegs, publish_pack
+        from app.sources.base import make_client
+
+        if args.prepare_only:
+            print(json.dumps([str(p) for p in make_jpegs(Path(args.pack_dir), Path(args.jpg_dir))], indent=2))
+            return 0
+        token, user_id = os.environ.get("INSTAGRAM_TOKEN", ""), os.environ.get("INSTAGRAM_USER_ID", "")
+        if not token or not user_id:
+            print("Faltam INSTAGRAM_TOKEN e INSTAGRAM_USER_ID nas variáveis do ambiente.", file=sys.stderr)
+            return 2
+        client = InstagramClient(token, user_id, make_client(settings.user_agent, timeout=60.0), settings.instagram_api_version)
+        try:
+            print(json.dumps(publish_pack(client, args.pack_dir, args.base_url, args.jpg_dir), ensure_ascii=False, indent=2))
+        except (InstagramError, ValueError) as exc:
+            print(f"Não publicou: {exc}", file=sys.stderr)
+            return 2
         return 0
 
     if args.cmd == "create-user":
