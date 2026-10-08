@@ -10,3 +10,6 @@ data/*.sqlite
 data/photos/
 data/art/
 data/brand/
+
+# Configuracao local com senhas (rodar no computador)
+config_local.ps1
