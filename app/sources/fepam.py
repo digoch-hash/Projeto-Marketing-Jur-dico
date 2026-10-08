@@ -13,7 +13,7 @@ from bs4 import BeautifulSoup
 from app.sources.base import RawItem, SourceError
 
 BASE = "https://www.fepam.rs.gov.br"
-PAGES = (f"{BASE}/comunicados", f"{BASE}/inicial")
+PAGES = (f"{BASE}/noticias", f"{BASE}/comunicados")  # /comunicados saiu do ar em out/2026; fica de reserva
 
 
 def parse(html_text: str) -> list[RawItem]:

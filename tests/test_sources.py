@@ -77,6 +77,17 @@ def test_fepam_fetch_deduplica_entre_paginas_e_filtra_data():
     assert [i.published_at for i in items] == [date(2026, 9, 30)]
 
 
+def test_fepam_fetch_sobrevive_a_pagina_fora_do_ar():
+    # em out/2026 /comunicados passou a dar 404; a coleta nao pode falhar se /noticias responde
+    def handler(req):
+        if req.url.path == "/comunicados":
+            return httpx.Response(404)
+        return httpx.Response(200, text=fixture_text("fepam_comunicados.html"))
+
+    items = fepam.FepamSource(_client(handler)).fetch(since=date(2026, 9, 25))
+    assert [i.published_at for i in items] == [date(2026, 9, 30)]
+
+
 def test_fepam_fetch_sem_rede_levanta_erro():
     def boom(req):
         raise httpx.ConnectError("sem rede")
