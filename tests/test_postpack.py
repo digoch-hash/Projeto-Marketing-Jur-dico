@@ -76,7 +76,7 @@ def test_cli_ig_token_devolve_o_token_da_pagina_e_o_id(tmp_path, monkeypatch, ca
     _cli_env(monkeypatch, tmp_path)
     fake = FakeInstagram()
     monkeypatch.setattr("app.sources.base.make_client", lambda *a, **k: fake.client())
-    assert cli.main(["ig-token", "--token", "TOKEN-CURTO-" + "x" * 20, "--username", "@HRBioAmbiental"]) == 0
+    assert cli.main(["ig-token", "--token", "EAAB" + "x" * 150, "--username", "@HRBioAmbiental"]) == 0
     out = json.loads(capsys.readouterr().out)
     assert out["INSTAGRAM_USER_ID"] == "1784140000" and out["INSTAGRAM_TOKEN"].startswith("PAGINA-TOKEN")
     assert out["INSTAGRAM_LOGIN"] == "facebook" and out["conta"] == "@hrbioambiental"
@@ -91,7 +91,7 @@ def test_cli_ig_token_nao_escolhe_sozinho_entre_varias_contas(tmp_path, monkeypa
     fake.pages.append({"name": "Outra", "access_token": "O" * 25,
                        "instagram_business_account": {"id": "999", "username": "outra.conta"}})
     monkeypatch.setattr("app.sources.base.make_client", lambda *a, **k: fake.client())
-    assert cli.main(["ig-token", "--token", "TOKEN-CURTO-" + "x" * 20]) == 2
+    assert cli.main(["ig-token", "--token", "EAAB" + "x" * 150]) == 2
     err = capsys.readouterr().err
     assert "@hrbioambiental" in err and "@outra.conta" in err and "--username" in err
 
@@ -120,3 +120,30 @@ def test_cli_publish_pack_usa_o_host_do_facebook_quando_pedido(tmp_path, monkeyp
     pack = _pack(tmp_path)
     assert cli.main(["publish-pack", "--pack-dir", str(pack), "--base-url", "https://x/y", "--jpg-dir", str(tmp_path / "jpg")]) == 0
     assert fake.calls and {c["host"] for c in fake.calls} == {"graph.facebook.com"}
+
+
+def test_cli_ig_token_diz_quantos_caracteres_recebeu_e_recusa_o_que_nao_e_token(tmp_path, monkeypatch, capsys):
+    from app import cli
+
+    _cli_env(monkeypatch, tmp_path)
+    assert cli.main(["ig-token", "--token", "^V"]) == 2
+    err = capsys.readouterr().err
+    assert "Recebi 2 caracteres" in err and "não parece o token inteiro" in err
+    assert cli.main(["ig-token", "--token", "abc" * 60]) == 2  # comprido, mas nao comeca com EA
+    assert "não parece o token inteiro" in capsys.readouterr().err
+
+
+def test_cli_ig_token_limpa_espacos_e_quebras_de_linha_do_token_colado(tmp_path, monkeypatch, capsys):
+    import json
+
+    from app import cli
+    from tests.fake_instagram import FakeInstagram
+
+    _cli_env(monkeypatch, tmp_path)
+    fake = FakeInstagram()
+    monkeypatch.setattr("app.sources.base.make_client", lambda *a, **k: fake.client())
+    colado = "  \"EAAB" + "x" * 150 + "\r\n"
+    assert cli.main(["ig-token", "--token", colado, "--username", "hrbioambiental"]) == 0
+    trocou = next(c for c in fake.calls if c["path"].endswith("/oauth/access_token"))
+    assert trocou["params"]["fb_exchange_token"] == "EAAB" + "x" * 150
+    assert json.loads(capsys.readouterr().out)["conta"] == "@hrbioambiental"

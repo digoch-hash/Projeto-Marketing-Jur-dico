@@ -123,7 +123,15 @@ def main(argv: list[str] | None = None) -> int:
         if not ig_account.uses_facebook_login(settings):
             print("Defina FACEBOOK_APP_ID e FACEBOOK_APP_SECRET nas variáveis do ambiente.", file=sys.stderr)
             return 2
-        token = (args.token or getpass.getpass("Token do Explorador da Graph API: ")).strip()
+        raw = args.token or getpass.getpass("Token do Explorador da Graph API (cole com o botão direito do mouse; não aparece nada): ")
+        # tira espacos, quebras de linha, aspas e caracteres invisiveis (como o ^V de um Ctrl+V que nao colou)
+        token = "".join(c for c in raw if c.isprintable() and not c.isspace()).strip("'\"")
+        print(f"Recebi {len(token)} caracteres.", file=sys.stderr)
+        if len(token) < 100 or not token.startswith("EA"):
+            print("Isso não parece o token inteiro: ele costuma ter mais de 150 caracteres e começar com EAA. "
+                  "No Explorador, clique no ícone de copiar ao lado do campo \"Token de acesso\" e cole de novo "
+                  "(botão direito do mouse nesta janela).", file=sys.stderr)
+            return 2
         http, version = make_client(settings.user_agent, timeout=60.0), settings.instagram_api_version
         try:
             long_token = InstagramClient.facebook_long_lived_token(
