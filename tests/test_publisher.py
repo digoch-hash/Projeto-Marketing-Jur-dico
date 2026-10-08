@@ -150,6 +150,35 @@ def test_publica_pelo_host_do_facebook(session_factory, fb_cfg, fake):
     assert fake.posts("/media_publish")
 
 
+def _duas_paginas(fake):
+    fake.pages.append({"name": "Laboratório JBLab", "access_token": "OUTRA-TOKEN-" + "x" * 20,
+                       "instagram_business_account": {"id": "999", "username": "laboratorio.jblab"}})
+    fake.pages.reverse()  # a Meta lista a outra primeiro: o sistema nao pode pegar a primeira
+
+
+def test_com_varias_contas_nao_escolhe_sozinho_e_pede_o_arroba(session_factory, fb_cfg, fake):
+    _duas_paginas(fake)
+    with session_factory() as db:
+        with pytest.raises(InstagramError, match="@hrbioambiental.*@laboratorio.jblab|@laboratorio.jblab.*@hrbioambiental"):
+            ig_account.connect(db, fb_cfg, TOKEN, http=fake.client())
+        assert not ig_account.is_connected(db)  # nada guardado
+
+
+def test_com_varias_contas_usa_a_do_arroba_informado(session_factory, fb_cfg, fake):
+    _duas_paginas(fake)
+    with session_factory() as db:
+        assert ig_account.connect(db, fb_cfg, TOKEN, http=fake.client(), username="@HRBioAmbiental") == "hrbioambiental"
+        assert ig_account.load_client(db, fb_cfg).ig_user_id == "1784140000"
+        assert ig_account.status(db)["page_name"] == "HRBio Ambiental"
+
+
+def test_arroba_que_o_token_nao_enxerga_e_recusado_listando_as_contas(session_factory, fb_cfg, fake):
+    with session_factory() as db:
+        with pytest.raises(InstagramError, match="@outra.*Achei: @hrbioambiental"):
+            ig_account.connect(db, fb_cfg, TOKEN, http=fake.client(), username="outra")
+        assert not ig_account.is_connected(db)
+
+
 def test_conectar_pelo_facebook_sem_pagina_com_instagram_nao_guarda_nada(session_factory, fb_cfg, fake):
     fake.pages = [{"name": "Outra Página", "access_token": "P" * 25}]  # sem Instagram ligado
     with session_factory() as db:

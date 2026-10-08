@@ -54,6 +54,10 @@
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label class="lbl" for="token">Token de acesso</label>
       <input id="token" class="fld" type="password" name="token" required autocomplete="off" autocapitalize="none" spellcheck="false">
+      {% if ig.facebook_login %}
+      <label class="lbl" for="username" style="margin-top:8px">@ do Instagram da HRBio (obrigatório se o token der acesso a mais de uma conta)</label>
+      <input id="username" class="fld" type="text" name="username" placeholder="hrbioambiental" autocomplete="off" autocapitalize="none" spellcheck="false">
+      {% endif %}
       <button class="btn primary" type="submit" style="width:100%;margin-top:8px">Conectar</button>
     </form>
     {% if ig.connected %}

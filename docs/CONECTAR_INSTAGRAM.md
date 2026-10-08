@@ -47,7 +47,9 @@ Facebook**. Nesse caso o Instagram da HRBio precisa estar ligado a uma **Página
    duração, pega o token da Página e mostra **"Conectado como @..."**.
 
 O token da Página obtido assim **não vence**: não há renovação. Se você mudar a senha do Facebook ou remover o app,
-conecte de novo. Se a conta tiver mais de uma Página com Instagram ligado, o sistema usa a primeira que a Meta listar.
+conecte de novo. Se o token der acesso a **mais de um Instagram** (você administra outras Páginas), o sistema **não
+escolhe sozinho**: digite o **@ do Instagram da HRBio** no campo "@ do Instagram" ao conectar. Dá para digitar o @ mesmo
+quando há uma conta só.
 
 ## Testar antes de automatizar
 1. No sistema, deixe a **publicação automática DESLIGADA** (é assim que nasce).

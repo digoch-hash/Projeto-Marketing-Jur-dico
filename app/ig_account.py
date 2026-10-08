@@ -47,8 +47,12 @@ def uses_facebook_login(settings: Settings) -> bool:
     return bool(settings.facebook_app_id and settings.facebook_app_secret)
 
 
-def connect_facebook(db, settings: Settings, token: str, http: httpx.Client | None = None) -> str:
-    """Login do Facebook: troca o token por um de longa duracao e guarda o token da Pagina ligada ao Instagram."""
+def connect_facebook(db, settings: Settings, token: str, http: httpx.Client | None = None, username: str = "") -> str:
+    """Login do Facebook: troca o token por um de longa duracao e guarda o token da Pagina ligada ao Instagram.
+
+    Se a conta do Facebook tem mais de um Instagram ligado a Paginas, `username` (@ do Instagram) diz qual usar:
+    nunca se escolhe sozinho entre varias.
+    """
     token = token.strip()
     if len(token) < 20:
         raise InstagramError("Esse token parece curto demais. Copie o token inteiro do Explorador da Graph API.")
@@ -60,6 +64,16 @@ def connect_facebook(db, settings: Settings, token: str, http: httpx.Client | No
         raise InstagramError(
             "Não achei nenhuma Página do Facebook com um Instagram profissional ligado. Ligue o Instagram da HRBio "
             "à Página e gere o token de novo, marcando a Página na autorização.")
+    wanted = username.strip().lstrip("@").lower()
+    names = ", ".join(f"@{a['username']}" for a in accounts)
+    if wanted:
+        accounts = [a for a in accounts if a["username"].lower() == wanted]
+        if not accounts:
+            raise InstagramError(f"Não achei @{wanted} entre as contas liberadas pelo token. Achei: {names}.")
+    elif len(accounts) > 1:
+        raise InstagramError(
+            f"Esse token dá acesso a mais de um Instagram ({names}). Digite o @ da conta da HRBio no campo "
+            "\"@ do Instagram\" e conecte de novo.")
     acc = accounts[0]
     now = utcnow()
     put(db, "ig_token", seal(settings.secret_key, acc["page_token"]))
@@ -72,10 +86,10 @@ def connect_facebook(db, settings: Settings, token: str, http: httpx.Client | No
     return acc["username"]
 
 
-def connect(db, settings: Settings, token: str, http: httpx.Client | None = None) -> str:
+def connect(db, settings: Settings, token: str, http: httpx.Client | None = None, username: str = "") -> str:
     """Valida o token na Meta e guarda. Devolve o @ da conta."""
     if uses_facebook_login(settings):
-        return connect_facebook(db, settings, token, http)
+        return connect_facebook(db, settings, token, http, username)
     token = token.strip()
     if len(token) < 20:
         raise InstagramError("Esse token parece curto demais. Copie o token inteiro do painel da Meta.")
