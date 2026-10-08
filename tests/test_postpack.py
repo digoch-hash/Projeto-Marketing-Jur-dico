@@ -40,15 +40,23 @@ def test_publica_so_os_slides_em_jpeg_e_na_ordem(tmp_path):
     assert urls == ["https://exemplo.test/x/slide_01.jpg", "https://exemplo.test/x/slide_02.jpg"]  # sem o story
     assert caption == "Legenda do post"
     assert out["media_id"] == "123" and out["link"] == "https://instagram.com/p/abc" and out["slides"] == 2
-    assert client.stories == ["https://exemplo.test/x/story.jpg", "https://exemplo.test/x/story_convite.jpg"]
-    assert out["stories"] == ["story", "story_convite"] and out["stories_com_erro"] == []
+    assert client.stories == ["https://exemplo.test/x/story.jpg"]  # so o resumo; o convite repete e nao sai
+    assert out["stories"] == ["story"] and out["stories_com_erro"] == []
     assert Image.open(tmp_path / "jpg" / "slide_01.jpg").format == "JPEG"
+    assert (tmp_path / "jpg" / "story_convite.jpg").exists()  # o JPEG existe, so nao e publicado
+
+
+def test_story_convite_so_sai_quando_pedido(tmp_path):
+    client = FakeClient()
+    out = publish_pack(client, _pack(tmp_path), "https://exemplo.test/x", tmp_path / "jpg", invite_story=True)
+    assert client.stories == ["https://exemplo.test/x/story.jpg", "https://exemplo.test/x/story_convite.jpg"]
+    assert out["stories"] == ["story", "story_convite"]
 
 
 def test_falha_num_story_nao_derruba_o_post(tmp_path):
     client = FakeClient()
     client.fail_convite = True
-    out = publish_pack(client, _pack(tmp_path), "https://exemplo.test/x", tmp_path / "jpg")
+    out = publish_pack(client, _pack(tmp_path), "https://exemplo.test/x", tmp_path / "jpg", invite_story=True)
     assert out["media_id"] == "123" and out["stories"] == ["story"]
     assert out["stories_com_erro"][0]["story"] == "story_convite"
 

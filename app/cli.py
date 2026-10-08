@@ -34,6 +34,7 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--base-url", required=True, help="endereco publico onde os .jpg estarao (sem o nome do arquivo)")
     pp.add_argument("--jpg-dir", required=True, help="pasta onde gerar os .jpg (publique-os em --base-url)")
     pp.add_argument("--prepare-only", action="store_true", help="so gera os .jpg, sem publicar")
+    pp.add_argument("--invite-story", action="store_true", help="publica tambem o story-convite (por padrao so o story do resumo)")
 
     it = sub.add_parser("ig-token", help="troca o token do Explorador da Graph API pelo token da Pagina (nao vence) para usar no publish-pack")
     it.add_argument("--username", default="", help="@ do Instagram da HRBio (obrigatorio se o token enxerga mais de uma conta)")
@@ -107,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
         client = InstagramClient(token, user_id, make_client(settings.user_agent, timeout=60.0),
                                  settings.instagram_api_version, host=host)
         try:
-            print(json.dumps(publish_pack(client, args.pack_dir, args.base_url, args.jpg_dir), ensure_ascii=False, indent=2))
+            print(json.dumps(publish_pack(client, args.pack_dir, args.base_url, args.jpg_dir, invite_story=args.invite_story), ensure_ascii=False, indent=2))
         except (InstagramError, ValueError) as exc:
             print(f"Não publicou: {exc}", file=sys.stderr)
             return 2
