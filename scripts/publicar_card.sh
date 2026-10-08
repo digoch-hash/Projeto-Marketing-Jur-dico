@@ -13,7 +13,7 @@ PY="${PY:-python}"
 BR="${CARDS_BRANCH:-cards-publicos}"
 ORIGIN="${CARDS_ORIGIN:-$(git remote get-url origin)}"
 RAW_BASE="${CARDS_RAW_BASE:-https://raw.githubusercontent.com/digoch-hash/Projeto-Marketing-Jur-dico/$BR}"
-KEEP="${CARDS_KEEP:-5}"   # quantos cards antigos manter no ramo (o Instagram guarda a propria copia)
+KEEP="${CARDS_KEEP:-}"    # opcional: manter so os N cards mais recentes no ramo (apagar pode ser barrado em modo automatico)
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
@@ -31,8 +31,11 @@ git -C "$work" config user.email "radar-hrbio@users.noreply.github.com"
 pasta="$(date -u +%Y%m%d%H%M%S)-$ID"
 "$PY" -m app.cli publish-pack --pack-dir "$PACK" --jpg-dir "$work/$pasta" --base-url "x" --prepare-only >/dev/null
 
-# apaga os cards mais antigos, deixando so os ultimos $KEEP (contando o novo)
-(cd "$work" && ls -1d [0-9]*/ 2>/dev/null | sort | head -n "-$KEEP" | xargs -r rm -rf)
+# por padrao NAO apaga nada: um push com remocao pode ser barrado em modo automatico e derrubaria a publicacao.
+# Se quiser limitar o tamanho do ramo, defina CARDS_KEEP=N (so os N mais recentes).
+if [ -n "$KEEP" ]; then
+  (cd "$work" && ls -1d [0-9]*/ 2>/dev/null | sort | head -n "-$KEEP" | xargs -r rm -rf)
+fi
 
 git -C "$work" add -A
 git -C "$work" commit -q -m "Card $ID"

@@ -5,8 +5,8 @@ Instagram, ela precisa de duas coisas, ambas gratuitas:
 
 1. **Credencial do Instagram** nas variáveis secretas do ambiente da rotina.
 2. **Um endereço público para as imagens.** O script `scripts/publicar_card.sh` guarda os JPEG no ramo
-   `cards-publicos` deste repositório (que é público) e usa o endereço `raw.githubusercontent.com`. Ele mantém só os
-   5 cards mais recentes; o Instagram guarda a própria cópia.
+   `cards-publicos` deste repositório (que é público) e usa o endereço `raw.githubusercontent.com`. Ele não apaga cards antigos
+   (um push com remoção pode ser barrado em modo automático); para limitar o tamanho do ramo, defina `CARDS_KEEP=N`.
 
 ## Pegar a credencial (uma vez, no seu computador)
 Com o sistema configurado como em `docs/RODAR_NO_COMPUTADOR.md` (`FACEBOOK_APP_ID` e `FACEBOOK_APP_SECRET`):
