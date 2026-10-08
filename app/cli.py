@@ -35,6 +35,10 @@ def main(argv: list[str] | None = None) -> int:
     pp.add_argument("--jpg-dir", required=True, help="pasta onde gerar os .jpg (publique-os em --base-url)")
     pp.add_argument("--prepare-only", action="store_true", help="so gera os .jpg, sem publicar")
 
+    it = sub.add_parser("ig-token", help="troca o token do Explorador da Graph API pelo token da Pagina (nao vence) para usar no publish-pack")
+    it.add_argument("--username", default="", help="@ do Instagram da HRBio (obrigatorio se o token enxerga mais de uma conta)")
+    it.add_argument("--token", help="token do Explorador; se omitido, pergunta no terminal (nao fica no historico)")
+
     u = sub.add_parser("create-user", help="cria ou atualiza um usuario")
     u.add_argument("username")
     u.add_argument("--password", help="se omitido, pergunta no terminal")
@@ -88,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         import os
         from pathlib import Path
 
-        from app.instagram import InstagramClient, InstagramError
+        from app.instagram import FACEBOOK_HOST, HOST, InstagramClient, InstagramError
         from app.postpack import make_jpegs, publish_pack
         from app.sources.base import make_client
 
@@ -99,12 +103,46 @@ def main(argv: list[str] | None = None) -> int:
         if not token or not user_id:
             print("Faltam INSTAGRAM_TOKEN e INSTAGRAM_USER_ID nas variáveis do ambiente.", file=sys.stderr)
             return 2
-        client = InstagramClient(token, user_id, make_client(settings.user_agent, timeout=60.0), settings.instagram_api_version)
+        host = FACEBOOK_HOST if os.environ.get("INSTAGRAM_LOGIN", "").strip().lower() == "facebook" else HOST
+        client = InstagramClient(token, user_id, make_client(settings.user_agent, timeout=60.0),
+                                 settings.instagram_api_version, host=host)
         try:
             print(json.dumps(publish_pack(client, args.pack_dir, args.base_url, args.jpg_dir), ensure_ascii=False, indent=2))
         except (InstagramError, ValueError) as exc:
             print(f"Não publicou: {exc}", file=sys.stderr)
             return 2
+        return 0
+
+    if args.cmd == "ig-token":
+        import json
+
+        from app import ig_account
+        from app.instagram import InstagramClient, InstagramError
+        from app.sources.base import make_client
+
+        if not ig_account.uses_facebook_login(settings):
+            print("Defina FACEBOOK_APP_ID e FACEBOOK_APP_SECRET nas variáveis do ambiente.", file=sys.stderr)
+            return 2
+        token = (args.token or getpass.getpass("Token do Explorador da Graph API: ")).strip()
+        http, version = make_client(settings.user_agent, timeout=60.0), settings.instagram_api_version
+        try:
+            long_token = InstagramClient.facebook_long_lived_token(
+                token, settings.facebook_app_id, settings.facebook_app_secret, http, version)
+            accounts = InstagramClient.facebook_instagram_accounts(long_token, http, version)
+        except InstagramError as exc:
+            print(f"Não deu certo: {exc}", file=sys.stderr)
+            return 2
+        wanted = args.username.strip().lstrip("@").lower()
+        if wanted:
+            accounts = [a for a in accounts if a["username"].lower() == wanted]
+        if len(accounts) != 1:
+            names = ", ".join(f"@{a['username']}" for a in accounts) or "nenhuma"
+            print(f"Preciso de exatamente uma conta; achei: {names}. Use --username @da_hrbio.", file=sys.stderr)
+            return 2
+        a = accounts[0]
+        # Guarde estes dois valores como segredos do ambiente da rotina. Nao os envie a ninguem.
+        print(json.dumps({"INSTAGRAM_USER_ID": a["ig_user_id"], "INSTAGRAM_TOKEN": a["page_token"],
+                          "INSTAGRAM_LOGIN": "facebook", "conta": f"@{a['username']}"}, ensure_ascii=False, indent=2))
         return 0
 
     if args.cmd == "create-user":

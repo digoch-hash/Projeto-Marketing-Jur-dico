@@ -57,3 +57,66 @@ def test_sem_stories_quando_desligado(tmp_path):
     client = FakeClient()
     out = publish_pack(client, _pack(tmp_path), "https://exemplo.test/x", tmp_path / "jpg", stories=False)
     assert not hasattr(client, "stories") and out["stories"] == []
+
+
+# ------------------------------------------------------- CLI (login do Facebook)
+def _cli_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'c.db'}")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("FACEBOOK_APP_ID", "123456")
+    monkeypatch.setenv("FACEBOOK_APP_SECRET", "segredo-do-app")
+
+
+def test_cli_ig_token_devolve_o_token_da_pagina_e_o_id(tmp_path, monkeypatch, capsys):
+    import json
+
+    from app import cli
+    from tests.fake_instagram import FakeInstagram
+
+    _cli_env(monkeypatch, tmp_path)
+    fake = FakeInstagram()
+    monkeypatch.setattr("app.sources.base.make_client", lambda *a, **k: fake.client())
+    assert cli.main(["ig-token", "--token", "TOKEN-CURTO-" + "x" * 20, "--username", "@HRBioAmbiental"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["INSTAGRAM_USER_ID"] == "1784140000" and out["INSTAGRAM_TOKEN"].startswith("PAGINA-TOKEN")
+    assert out["INSTAGRAM_LOGIN"] == "facebook" and out["conta"] == "@hrbioambiental"
+
+
+def test_cli_ig_token_nao_escolhe_sozinho_entre_varias_contas(tmp_path, monkeypatch, capsys):
+    from app import cli
+    from tests.fake_instagram import FakeInstagram
+
+    _cli_env(monkeypatch, tmp_path)
+    fake = FakeInstagram()
+    fake.pages.append({"name": "Outra", "access_token": "O" * 25,
+                       "instagram_business_account": {"id": "999", "username": "outra.conta"}})
+    monkeypatch.setattr("app.sources.base.make_client", lambda *a, **k: fake.client())
+    assert cli.main(["ig-token", "--token", "TOKEN-CURTO-" + "x" * 20]) == 2
+    err = capsys.readouterr().err
+    assert "@hrbioambiental" in err and "@outra.conta" in err and "--username" in err
+
+
+def test_cli_ig_token_exige_o_id_e_a_chave_do_app(tmp_path, monkeypatch, capsys):
+    from app import cli
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'c.db'}")
+    monkeypatch.delenv("FACEBOOK_APP_ID", raising=False)
+    monkeypatch.delenv("FACEBOOK_APP_SECRET", raising=False)
+    assert cli.main(["ig-token", "--token", "x" * 30]) == 2
+    assert "FACEBOOK_APP_ID" in capsys.readouterr().err
+
+
+def test_cli_publish_pack_usa_o_host_do_facebook_quando_pedido(tmp_path, monkeypatch, capsys):
+    from app import cli
+    from tests.fake_instagram import FakeInstagram
+
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'c.db'}")
+    monkeypatch.setenv("INSTAGRAM_TOKEN", "TOKEN-BOM-" + "x" * 20)
+    monkeypatch.setenv("INSTAGRAM_USER_ID", "1784140000")
+    monkeypatch.setenv("INSTAGRAM_LOGIN", "facebook")
+    fake = FakeInstagram()
+    monkeypatch.setattr("app.sources.base.make_client", lambda *a, **k: fake.client())
+    monkeypatch.setattr("app.instagram.time.sleep", lambda s: None)
+    pack = _pack(tmp_path)
+    assert cli.main(["publish-pack", "--pack-dir", str(pack), "--base-url", "https://x/y", "--jpg-dir", str(tmp_path / "jpg")]) == 0
+    assert fake.calls and {c["host"] for c in fake.calls} == {"graph.facebook.com"}
