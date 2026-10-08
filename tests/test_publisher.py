@@ -117,6 +117,64 @@ def test_token_so_e_renovado_quando_faltam_menos_de_25_dias_e_passou_um_dia(sess
         assert ig_account.status(db, now)["days_left"] >= 59
 
 
+# ------------------------------------------------------- login do Facebook (Pagina)
+@pytest.fixture
+def fb_cfg(cfg):
+    return replace(cfg, facebook_app_id="123456", facebook_app_secret="segredo-do-app")
+
+
+def test_conectar_pelo_facebook_guarda_o_token_da_pagina_que_nao_vence(session_factory, fb_cfg, fake):
+    with session_factory() as db:
+        assert ig_account.connect(db, fb_cfg, TOKEN, http=fake.client()) == "hrbioambiental"
+        trocou = next(c for c in fake.calls if c["path"].endswith("/oauth/access_token"))
+        assert trocou["params"]["client_id"] == "123456" and trocou["params"]["client_secret"] == "segredo-do-app"
+        assert trocou["params"]["fb_exchange_token"] == TOKEN
+        raw = db.get(Setting, "ig_token").value
+        assert "PAGINA-TOKEN" not in raw and TOKEN not in raw  # nunca em texto puro
+        st = ig_account.status(db)
+        assert st["connected"] and st["facebook_mode"] and st["page_name"] == "HRBio Ambiental"
+        assert st["days_left"] is None and st["auto_publish"] is False
+        client = ig_account.load_client(db, fb_cfg)
+        assert client.token.startswith("PAGINA-TOKEN") and client.ig_user_id == "1784140000"
+        assert client.host == "https://graph.facebook.com"
+        assert ig_account.refresh_if_needed(db, fb_cfg, fake.client()) is False  # nao ha o que renovar
+
+
+def test_publica_pelo_host_do_facebook(session_factory, fb_cfg, fake):
+    with session_factory() as db:
+        ig_account.connect(db, fb_cfg, TOKEN, http=fake.client())
+        fake.calls.clear()
+        client = ig_account.load_client(db, fb_cfg, fake.client(), sleep=lambda s: None)
+    client.publish_carousel(["https://x/1.jpg", "https://x/2.jpg"], "legenda")
+    assert fake.calls and {c["host"] for c in fake.calls} == {"graph.facebook.com"}
+    assert fake.posts("/media_publish")
+
+
+def test_conectar_pelo_facebook_sem_pagina_com_instagram_nao_guarda_nada(session_factory, fb_cfg, fake):
+    fake.pages = [{"name": "Outra Página", "access_token": "P" * 25}]  # sem Instagram ligado
+    with session_factory() as db:
+        with pytest.raises(InstagramError, match="Página"):
+            ig_account.connect(db, fb_cfg, TOKEN, http=fake.client())
+        assert not ig_account.is_connected(db)
+
+
+def test_conectar_pelo_facebook_recusa_token_vencido(session_factory, fb_cfg, fake):
+    with session_factory() as db:
+        with pytest.raises(InstagramError) as exc:
+            ig_account.connect(db, fb_cfg, "TOKEN-VENCIDO-" + "x" * 20, http=fake.client())
+        assert exc.value.token_invalid and not ig_account.is_connected(db)
+
+
+def test_reconectar_pelo_instagram_volta_ao_host_do_instagram(session_factory, cfg, fb_cfg, fake):
+    with session_factory() as db:
+        ig_account.connect(db, fb_cfg, TOKEN, http=fake.client())
+        ig_account.connect(db, cfg, TOKEN, http=fake.client())
+        assert ig_account.load_client(db, cfg).host == "https://graph.instagram.com"
+        assert not ig_account.status(db)["facebook_mode"]
+        ig_account.disconnect(db)
+        assert db.get(Setting, "ig_mode") is None
+
+
 # --------------------------------------------------------------- publicacao
 def test_publica_carrossel_e_story_e_fecha_o_ciclo(session_factory, cfg, connected):
     item_id = add_post(session_factory)

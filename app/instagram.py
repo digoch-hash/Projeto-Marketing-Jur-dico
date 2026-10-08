@@ -1,7 +1,9 @@
-"""Cliente da Instagram API (login do Instagram): publicar carrossel/story e renovar o token.
+"""Cliente da Instagram API: publicar carrossel/story e renovar o token.
 
-Endpoints conforme a documentacao da Meta (Content Publishing): POST /{ig-id}/media, POST /{ig-id}/media_publish,
-GET /{container-id}?fields=status_code. As imagens precisam ser JPEG e estar em enderecos publicos.
+Funciona nas duas variantes da Meta: login do Instagram (`graph.instagram.com`) e login do Facebook, em que a conta do
+Instagram fica ligada a uma Pagina (`graph.facebook.com`). Os endpoints de publicacao sao os mesmos (Content
+Publishing): POST /{ig-id}/media, POST /{ig-id}/media_publish, GET /{container-id}?fields=status_code.
+As imagens precisam ser JPEG e estar em enderecos publicos.
 """
 from __future__ import annotations
 
@@ -11,6 +13,7 @@ from dataclasses import dataclass
 import httpx
 
 HOST = "https://graph.instagram.com"
+FACEBOOK_HOST = "https://graph.facebook.com"
 MAX_CAROUSEL = 10
 CAPTION_MAX = 2200
 HASHTAGS_MAX = 30
@@ -51,12 +54,14 @@ def check_caption(caption: str) -> None:
 
 
 class InstagramClient:
-    def __init__(self, token: str, ig_user_id: str, http: httpx.Client, version: str = "v23.0", sleep=time.sleep):
+    def __init__(self, token: str, ig_user_id: str, http: httpx.Client, version: str = "v23.0", sleep=time.sleep,
+                 host: str = HOST):
         self.token, self.ig_user_id, self.http, self.version, self.sleep = token, ig_user_id, http, version, sleep
+        self.host = host
 
     # ---------------------------------------------------------------- baixo nivel
     def _url(self, path: str) -> str:
-        return f"{HOST}/{self.version}/{path.lstrip('/')}"
+        return f"{self.host}/{self.version}/{path.lstrip('/')}"
 
     def _request(self, method: str, path: str, **params) -> dict:
         params["access_token"] = self.token
@@ -153,6 +158,50 @@ class InstagramClient:
         container = self.create_image_container(image_url, story=True)
         self.wait_ready(container)
         return Published(self.publish(container))
+
+    # --------------------------------------------------- login do Facebook (via Pagina)
+    @staticmethod
+    def _facebook_get(http: httpx.Client, version: str, path: str, **params) -> dict:
+        try:
+            resp = http.get(f"{FACEBOOK_HOST}/{version}/{path}", params=params)
+        except httpx.HTTPError as exc:
+            raise InstagramError(f"Não consegui falar com a Meta: {exc}") from exc
+        if resp.status_code >= 400:
+            raise _error_from(resp)
+        try:
+            return resp.json()
+        except ValueError as exc:
+            raise InstagramError("Resposta inesperada da Meta.") from exc
+
+    @staticmethod
+    def facebook_long_lived_token(user_token: str, app_id: str, app_secret: str, http: httpx.Client,
+                                  version: str = "v23.0") -> str:
+        """Troca o token curto (cerca de 1 h) do Explorador da Graph API por um de longa duracao (60 dias)."""
+        data = InstagramClient._facebook_get(
+            http, version, "oauth/access_token",
+            grant_type="fb_exchange_token", client_id=app_id, client_secret=app_secret, fb_exchange_token=user_token,
+        )
+        if not data.get("access_token"):
+            raise InstagramError("A Meta não devolveu o token de longa duração.")
+        return data["access_token"]
+
+    @staticmethod
+    def facebook_instagram_accounts(user_token: str, http: httpx.Client, version: str = "v23.0") -> list[dict]:
+        """Paginas do usuario que tem um Instagram profissional ligado, com o token de cada Pagina.
+
+        O token de Pagina obtido de um token de usuario de longa duracao nao expira.
+        """
+        data = InstagramClient._facebook_get(
+            http, version, "me/accounts",
+            fields="name,access_token,instagram_business_account{id,username}", limit="100", access_token=user_token,
+        )
+        found = []
+        for page in data.get("data", []):
+            ig = page.get("instagram_business_account") or {}
+            if ig.get("id") and page.get("access_token"):
+                found.append({"page_name": page.get("name", ""), "page_token": page["access_token"],
+                              "ig_user_id": str(ig["id"]), "username": ig.get("username", "")})
+        return found
 
     # ------------------------------------------------------------------- token
     @staticmethod

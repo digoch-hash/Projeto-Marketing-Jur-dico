@@ -463,6 +463,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         info = ig_account.status(db)
         info["public_url_ok"] = settings.public_base_url.startswith("https://")
         info["publish_hour"] = settings.publish_hour
+        info["facebook_login"] = ig_account.uses_facebook_login(settings)
         return info
 
     @app.get("/instagram")

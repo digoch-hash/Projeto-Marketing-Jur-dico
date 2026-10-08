@@ -19,6 +19,8 @@ class Settings:
     publish_hour: int = 9
     scheduler_enabled: bool = True
     instagram_api_version: str = "v23.0"
+    facebook_app_id: str = ""  # com ID + chave do app, o Instagram conecta pelo login do Facebook (via Pagina)
+    facebook_app_secret: str = ""
     alert_min_relevance: int = 60
     smtp_host: str = ""
     smtp_port: int = 465
@@ -46,6 +48,8 @@ def load_settings() -> Settings:
         publish_hour=max(0, min(23, int(os.getenv("PUBLISH_HOUR", "9")))),
         scheduler_enabled=os.getenv("DISABLE_SCHEDULER", "0") != "1",
         instagram_api_version=os.getenv("INSTAGRAM_API_VERSION", "v23.0"),
+        facebook_app_id=os.getenv("FACEBOOK_APP_ID", "").strip(),
+        facebook_app_secret=os.getenv("FACEBOOK_APP_SECRET", "").strip(),
         alert_min_relevance=max(0, min(100, int(os.getenv("ALERT_MIN_RELEVANCE", "60")))),
         smtp_host=os.getenv("SMTP_HOST", "").strip(),
         smtp_port=int(os.getenv("SMTP_PORT", "465")),
