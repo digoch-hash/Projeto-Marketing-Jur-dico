@@ -14,7 +14,9 @@ Com o sistema configurado como em `docs/RODAR_NO_COMPUTADOR.md` (`FACEBOOK_APP_I
 2. No PowerShell, na pasta do projeto, depois de rodar `. .\config_local.ps1`:
    `.venv\Scripts\python -m app.cli ig-token --username hrbioambiental`
    (ele pergunta o token no terminal, sem deixar no histórico).
-3. Ele mostra `INSTAGRAM_USER_ID` e `INSTAGRAM_TOKEN`. O token da Página **não vence**.
+3. No Windows, o `pegar_credencial_windows.bat` mostra o `INSTAGRAM_USER_ID` e **copia o token direto para a área de
+   transferência, sem exibi-lo**: é só colar no campo do ambiente. O token da Página **não vence**: se aparecer em
+   algum chat ou arquivo, revogue o app em *Facebook → Configurações → Integrações comerciais* e gere outro.
 
 ## Guardar no ambiente da rotina
 Nas configurações do ambiente de nuvem do Claude Code, em **Segredos** (variáveis de ambiente), crie:
