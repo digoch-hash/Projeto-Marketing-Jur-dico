@@ -7,7 +7,7 @@ import httpx
 from sqlalchemy import select
 
 from app.config import Settings
-from app.instagram import InstagramClient, InstagramError
+from app.instagram import FACEBOOK_HOST, HOST, InstagramClient, InstagramError
 from app.models import Setting, utcnow
 from app.secrets_box import SecretBoxError, seal, unseal
 
@@ -43,8 +43,53 @@ def _http(http: httpx.Client | None) -> httpx.Client:
     return _shared
 
 
-def connect(db, settings: Settings, token: str, http: httpx.Client | None = None) -> str:
+def uses_facebook_login(settings: Settings) -> bool:
+    return bool(settings.facebook_app_id and settings.facebook_app_secret)
+
+
+def connect_facebook(db, settings: Settings, token: str, http: httpx.Client | None = None, username: str = "") -> str:
+    """Login do Facebook: troca o token por um de longa duracao e guarda o token da Pagina ligada ao Instagram.
+
+    Se a conta do Facebook tem mais de um Instagram ligado a Paginas, `username` (@ do Instagram) diz qual usar:
+    nunca se escolhe sozinho entre varias.
+    """
+    token = token.strip()
+    if len(token) < 20:
+        raise InstagramError("Esse token parece curto demais. Copie o token inteiro do Explorador da Graph API.")
+    client, version = _http(http), settings.instagram_api_version
+    long_token = InstagramClient.facebook_long_lived_token(
+        token, settings.facebook_app_id, settings.facebook_app_secret, client, version)
+    accounts = InstagramClient.facebook_instagram_accounts(long_token, client, version)
+    if not accounts:
+        raise InstagramError(
+            "Não achei nenhuma Página do Facebook com um Instagram profissional ligado. Ligue o Instagram da HRBio "
+            "à Página e gere o token de novo, marcando a Página na autorização.")
+    wanted = username.strip().lstrip("@").lower()
+    names = ", ".join(f"@{a['username']}" for a in accounts)
+    if wanted:
+        accounts = [a for a in accounts if a["username"].lower() == wanted]
+        if not accounts:
+            raise InstagramError(f"Não achei @{wanted} entre as contas liberadas pelo token. Achei: {names}.")
+    elif len(accounts) > 1:
+        raise InstagramError(
+            f"Esse token dá acesso a mais de um Instagram ({names}). Digite o @ da conta da HRBio no campo "
+            "\"@ do Instagram\" e conecte de novo.")
+    acc = accounts[0]
+    now = utcnow()
+    put(db, "ig_token", seal(settings.secret_key, acc["page_token"]))
+    put(db, "ig_user_id", acc["ig_user_id"])
+    put(db, "ig_username", acc["username"])
+    put(db, "ig_mode", "facebook")
+    put(db, "ig_page_name", acc["page_name"])
+    put(db, "ig_token_expires", "")  # token de Pagina nao vence: nao ha o que renovar
+    put(db, "ig_token_refreshed", now.isoformat())
+    return acc["username"]
+
+
+def connect(db, settings: Settings, token: str, http: httpx.Client | None = None, username: str = "") -> str:
     """Valida o token na Meta e guarda. Devolve o @ da conta."""
+    if uses_facebook_login(settings):
+        return connect_facebook(db, settings, token, http, username)
     token = token.strip()
     if len(token) < 20:
         raise InstagramError("Esse token parece curto demais. Copie o token inteiro do painel da Meta.")
@@ -56,13 +101,16 @@ def connect(db, settings: Settings, token: str, http: httpx.Client | None = None
     put(db, "ig_token", seal(settings.secret_key, token))
     put(db, "ig_user_id", user_id)
     put(db, "ig_username", username)
+    put(db, "ig_mode", "instagram")
+    put(db, "ig_page_name", "")
     put(db, "ig_token_expires", (now + TOKEN_LIFETIME).isoformat())
     put(db, "ig_token_refreshed", now.isoformat())
     return username
 
 
 def disconnect(db) -> None:
-    for key in ("ig_token", "ig_user_id", "ig_username", "ig_token_expires", "ig_token_refreshed", "ig_auto_publish"):
+    for key in ("ig_token", "ig_user_id", "ig_username", "ig_token_expires", "ig_token_refreshed", "ig_auto_publish",
+                "ig_mode", "ig_page_name"):
         row = db.get(Setting, key)
         if row:
             db.delete(row)
@@ -80,7 +128,8 @@ def load_client(db, settings: Settings, http: httpx.Client | None = None, **kw) 
         token = unseal(settings.secret_key, get(db, "ig_token"))
     except SecretBoxError as exc:
         raise InstagramError(str(exc), token_invalid=True) from exc
-    return InstagramClient(token, get(db, "ig_user_id"), _http(http), settings.instagram_api_version, **kw)
+    host = FACEBOOK_HOST if get(db, "ig_mode") == "facebook" else HOST
+    return InstagramClient(token, get(db, "ig_user_id"), _http(http), settings.instagram_api_version, host=host, **kw)
 
 
 def status(db, now: datetime | None = None) -> dict:
@@ -89,6 +138,8 @@ def status(db, now: datetime | None = None) -> dict:
     return {
         "connected": is_connected(db),
         "username": get(db, "ig_username"),
+        "facebook_mode": get(db, "ig_mode") == "facebook",
+        "page_name": get(db, "ig_page_name"),
         "expires": expires,
         "days_left": (expires - now).days if expires else None,
         "auto_publish": get(db, "ig_auto_publish") == "1",

@@ -463,6 +463,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         info = ig_account.status(db)
         info["public_url_ok"] = settings.public_base_url.startswith("https://")
         info["publish_hour"] = settings.publish_hour
+        info["facebook_login"] = ig_account.uses_facebook_login(settings)
         return info
 
     @app.get("/instagram")
@@ -474,7 +475,7 @@ def create_app(settings: Settings | None = None, session_factory=None) -> FastAP
         form = await request.form()
         check_csrf(request, str(form.get("csrf", "")))
         try:
-            username = ig_account.connect(db, settings, str(form.get("token", "")))
+            username = ig_account.connect(db, settings, str(form.get("token", "")), username=str(form.get("username", "")))
             request.session["flash"] = f"Conectado como @{username}. Deixei a publicação automática DESLIGADA: teste antes de ligar."
         except InstagramError as exc:
             request.session["flash"] = f"Não foi possível conectar: {exc}"

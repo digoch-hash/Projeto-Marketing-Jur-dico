@@ -107,6 +107,29 @@ def fit_kicker(text: str, max_w: int, size: int = 30, tracking: int = 5) -> tupl
     return text, fnt, tracking
 
 
+def wrap_kicker(text: str, max_w: int, size: int = 28, tracking: int = 4, max_lines: int = 2) -> tuple[list[str], ImageFont.FreeTypeFont, int]:
+    """Quebra o rotulo da norma em ate `max_lines` linhas (sem cortar); so abrevia se nem assim couber."""
+    text = text.upper().strip().rstrip(".")
+    fnt = font("SemiBold", size)
+    lines: list[str] = []
+    current = ""
+    for word in text.split():
+        trial = f"{current} {word}".strip()
+        if spaced_width(trial, fnt, tracking) <= max_w or not current:
+            current = trial
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    if len(lines) > max_lines:
+        lines = lines[:max_lines]
+        last = lines[-1]
+        while last and spaced_width(last + "…", fnt, tracking) > max_w:
+            last = last.rsplit(" ", 1)[0] if " " in last else last[:-1]
+        lines[-1] = last + "…"
+    return lines, fnt, tracking
+
+
 # ---------------------------------------------------------------------- fundo
 def _vertical_gradient(size: tuple[int, int], top: int, bottom: int) -> Image.Image:
     """Mascara 'L' que vai de `top` a `bottom` (0-255) de cima para baixo."""
@@ -292,8 +315,10 @@ def render_post_slide(
     place_logo(img, (MARGIN_X, 70), logos[0], logos[1])
 
     top = 330
-    k_text, k_font, tracking = fit_kicker(kicker, text_w)
-    draw_spaced(d, (MARGIN_X, top), k_text, k_font, LIME, tracking)
+    k_lines, k_font, tracking = wrap_kicker(kicker, text_w)
+    k_h = 40
+    for i, k_line in enumerate(k_lines):  # rotulo longo quebra em 2 linhas, sem mexer no resto do layout
+        draw_spaced(d, (MARGIN_X, top - k_h * (len(k_lines) - 1) + i * k_h), k_line, k_font, LIME, tracking)
     _rule(d, MARGIN_X, top + 56, 120)
 
     title_block = fit_block(title.upper() if cover else title, "ExtraBold", text_w, 380 if cover else 300,

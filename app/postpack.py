@@ -39,8 +39,12 @@ def make_jpegs(pack_dir: Path, out_dir: Path) -> list[Path]:
     return paths
 
 
-def publish_pack(client, pack_dir: str | Path, base_url: str, jpg_dir: str | Path, *, stories: bool = True) -> dict:
-    """Publica o carrossel e, em seguida, os stories. Falha num story nao desfaz o post (ja esta no ar)."""
+def publish_pack(client, pack_dir: str | Path, base_url: str, jpg_dir: str | Path, *, stories: bool = True,
+                 invite_story: bool = False) -> dict:
+    """Publica o carrossel e, em seguida, o story da chamada resumida (e, so se `invite_story`, o story-convite).
+
+    Falha num story nao desfaz o post (ja esta no ar).
+    """
     pack = Path(pack_dir)
     make_jpegs(pack, Path(jpg_dir))
     slides = slide_names(pack)
@@ -51,6 +55,8 @@ def publish_pack(client, pack_dir: str | Path, base_url: str, jpg_dir: str | Pat
     out = {"media_id": result.media_id, "link": result.permalink, "slides": len(slides), "stories": [], "stories_com_erro": []}
     if stories:
         for name in story_names(pack):
+            if name == "story_convite" and not invite_story:  # o convite repete o resumo: so sai se pedido
+                continue
             try:
                 client.publish_story(f"{base}/{name}.jpg")
                 out["stories"].append(name)

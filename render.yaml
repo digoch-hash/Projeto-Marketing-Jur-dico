@@ -27,6 +27,11 @@ services:
         sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
+      # Instagram pelo login do Facebook (ID e chave do app da Meta): veja docs/CONECTAR_INSTAGRAM.md
+      - key: FACEBOOK_APP_ID
+        sync: false
+      - key: FACEBOOK_APP_SECRET
+        sync: false
       # Aviso por e-mail (opcional): veja docs/COLOCAR_NO_AR.md
       - key: SMTP_HOST
         sync: false

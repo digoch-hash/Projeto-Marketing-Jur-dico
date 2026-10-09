@@ -29,6 +29,28 @@ renova sozinho. Você pode apagá-la a qualquer momento pelo botão **Desconecta
 O app pode ficar em **modo de desenvolvimento** (não precisa "publicar" o app nem passar por revisão da Meta): como a
 conta é a sua própria, ela já tem permissão. Se a Meta pedir revisão (App Review) em algum passo, pare e me avise.
 
+## Variante com login do Facebook (via Página)
+A Meta nem sempre oferece o "login do Instagram" acima: em alguns apps só existe a **API do Instagram com login do
+Facebook**. Nesse caso o Instagram da HRBio precisa estar ligado a uma **Página do Facebook**, e o sistema conecta por ela.
+
+**O que fazer:**
+1. **Ligar o Instagram à Página.** Na Página da HRBio: *Configurações → Contas vinculadas → Instagram*. A conta do
+   Instagram precisa ser **Profissional**.
+2. **Dar ao sistema o ID e a chave do app.** No painel do app: *Configurações do app → Básico*. Copie o **ID do app** e a
+   **Chave secreta do app** e coloque nas variáveis `FACEBOOK_APP_ID` e `FACEBOOK_APP_SECRET` do servidor (na Render:
+   *Environment*). A chave secreta é como uma senha: não envie a ninguém. Com essas duas variáveis preenchidas, a tela
+   **Instagram** passa a usar este modo.
+3. **Gerar o token.** Em **developers.facebook.com/tools/explorer**, escolha o seu app, clique em **Generate Access
+   Token** e marque a **Página** e o **Instagram** da HRBio na autorização. Antes, adicione as permissões
+   `instagram_basic`, `instagram_content_publishing`, `pages_read_engagement`, `pages_show_list` e `business_management`.
+4. **Colar na tela Instagram** do sistema e confirmar. Ele troca o token (que dura cerca de 1 hora) por um de longa
+   duração, pega o token da Página e mostra **"Conectado como @..."**.
+
+O token da Página obtido assim **não vence**: não há renovação. Se você mudar a senha do Facebook ou remover o app,
+conecte de novo. Se o token der acesso a **mais de um Instagram** (você administra outras Páginas), o sistema **não
+escolhe sozinho**: digite o **@ do Instagram da HRBio** no campo "@ do Instagram" ao conectar. Dá para digitar o @ mesmo
+quando há uma conta só.
+
 ## Testar antes de automatizar
 1. No sistema, deixe a **publicação automática DESLIGADA** (é assim que nasce).
 2. Tenha um rascunho **aprovado** e abra a página dele. Toque em **Publicar agora no Instagram**.

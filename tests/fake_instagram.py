@@ -13,6 +13,11 @@ class FakeInstagram:
         self.fail_on: dict[str, httpx.Response | Exception] = {}  # "media", "media_publish", "story", "status"
         self._n = 0
         self.published: list[str] = []
+        # Paginas devolvidas por /me/accounts (login do Facebook)
+        self.pages: list[dict] = [{
+            "name": "HRBio Ambiental", "access_token": "PAGINA-TOKEN-" + "x" * 20,
+            "instagram_business_account": {"id": "1784140000", "username": "hrbioambiental"},
+        }]
 
     def client(self) -> httpx.Client:
         def safe(req):
@@ -32,11 +37,15 @@ class FakeInstagram:
         params = dict(req.url.params)
         if req.method == "POST":
             params = {k: v[0] for k, v in parse_qs(req.content.decode()).items()}
-        self.calls.append({"method": req.method, "path": path, "params": params})
-        token = params.get("access_token")
+        self.calls.append({"method": req.method, "host": req.url.host, "path": path, "params": params})
+        token = params.get("access_token") or params.get("fb_exchange_token")
         if token and token.startswith("TOKEN-VENCIDO"):
             return httpx.Response(400, json={"error": {"message": "Error validating access token", "code": 190}})
 
+        if path.endswith("/oauth/access_token"):
+            return httpx.Response(200, json={"access_token": "LONGO-" + "x" * 20, "token_type": "bearer"})
+        if path.endswith("/me/accounts"):
+            return httpx.Response(200, json={"data": self.pages})
         if path.endswith("/refresh_access_token"):
             return httpx.Response(200, json={"access_token": "NOVO-TOKEN-" + "x" * 20, "token_type": "bearer", "expires_in": 5184000})
         if path.endswith("/me"):

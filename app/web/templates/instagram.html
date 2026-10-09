@@ -10,7 +10,8 @@
     <h3 class="sec">Estado</h3>
     {% if ig.connected %}
       <p><strong>Conectado como @{{ ig.username }}</strong></p>
-      <p class="status-line">Autorização válida por mais {{ ig.days_left }} dias; o sistema renova sozinho.</p>
+      {% if ig.facebook_mode %}<p class="status-line">Pela Página do Facebook <strong>{{ ig.page_name }}</strong>. Essa autorização não vence; se você mudar a senha do Facebook ou tirar o app, conecte de novo.</p>
+      {% elif ig.days_left is not none %}<p class="status-line">Autorização válida por mais {{ ig.days_left }} dias; o sistema renova sozinho.</p>{% endif %}
     {% else %}
       <p>Não conectado.</p>
     {% endif %}
@@ -36,15 +37,27 @@
 
   <section class="card">
     <h3 class="sec">{{ 'Trocar a autorização' if ig.connected else 'Conectar' }}</h3>
+    {% if ig.facebook_login %}
+    <ol class="status-line" style="padding-left:18px">
+      <li>O Instagram da HRBio precisa estar ligado à Página do Facebook da HRBio.</li>
+      <li>No <em>Explorador da Graph API</em> (developers.facebook.com/tools/explorer), escolha o seu app, adicione as permissões e clique em <strong>Generate Access Token</strong>, marcando a Página e o Instagram da HRBio.</li>
+      <li>Copie o token gerado e cole abaixo. O sistema troca por um token que não vence. Passo a passo em <code>docs/CONECTAR_INSTAGRAM.md</code>.</li>
+    </ol>
+    {% else %}
     <ol class="status-line" style="padding-left:18px">
       <li>No painel da Meta para desenvolvedores, abra o seu app e vá em <em>Instagram → API setup with Instagram login</em>.</li>
       <li>Adicione a conta da HRBio e clique em <strong>Generate token</strong>; entre no Instagram quando pedir.</li>
       <li>Copie o token gerado e cole abaixo. Passo a passo completo em <code>docs/CONECTAR_INSTAGRAM.md</code>.</li>
     </ol>
+    {% endif %}
     <form method="post" action="/instagram/conectar" autocomplete="off">
       <input type="hidden" name="csrf" value="{{ csrf }}">
       <label class="lbl" for="token">Token de acesso</label>
       <input id="token" class="fld" type="password" name="token" required autocomplete="off" autocapitalize="none" spellcheck="false">
+      {% if ig.facebook_login %}
+      <label class="lbl" for="username" style="margin-top:8px">@ do Instagram da HRBio (obrigatório se o token der acesso a mais de uma conta)</label>
+      <input id="username" class="fld" type="text" name="username" placeholder="hrbioambiental" autocomplete="off" autocapitalize="none" spellcheck="false">
+      {% endif %}
       <button class="btn primary" type="submit" style="width:100%;margin-top:8px">Conectar</button>
     </form>
     {% if ig.connected %}
