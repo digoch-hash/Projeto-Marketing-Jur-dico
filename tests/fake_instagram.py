@@ -13,6 +13,7 @@ class FakeInstagram:
         self.fail_on: dict[str, httpx.Response | Exception] = {}  # "media", "media_publish", "story", "status"
         self._n = 0
         self.published: list[str] = []
+        self.token_expires_at = 0  # 0 = o token da Pagina nunca vence (debug_token)
         # Paginas devolvidas por /me/accounts (login do Facebook)
         self.pages: list[dict] = [{
             "name": "HRBio Ambiental", "access_token": "PAGINA-TOKEN-" + "x" * 20,
@@ -42,6 +43,9 @@ class FakeInstagram:
         if token and token.startswith("TOKEN-VENCIDO"):
             return httpx.Response(400, json={"error": {"message": "Error validating access token", "code": 190}})
 
+        if path.endswith("/debug_token"):
+            return httpx.Response(200, json={"data": {"is_valid": True, "type": "PAGE", "expires_at": self.token_expires_at,
+                                                      "data_access_expires_at": 0}})
         if path.endswith("/oauth/access_token"):
             return httpx.Response(200, json={"access_token": "LONGO-" + "x" * 20, "token_type": "bearer"})
         if path.endswith("/me/accounts"):

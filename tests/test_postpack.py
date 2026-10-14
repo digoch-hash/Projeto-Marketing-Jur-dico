@@ -155,3 +155,47 @@ def test_cli_ig_token_limpa_espacos_e_quebras_de_linha_do_token_colado(tmp_path,
     trocou = next(c for c in fake.calls if c["path"].endswith("/oauth/access_token"))
     assert trocou["params"]["fb_exchange_token"] == "EAAB" + "x" * 150
     assert json.loads(capsys.readouterr().out)["conta"] == "@hrbioambiental"
+
+
+def test_cli_ig_token_mostra_a_validade_do_token_da_pagina(tmp_path, monkeypatch, capsys):
+    import json
+
+    from app import cli
+    from tests.fake_instagram import FakeInstagram
+
+    _cli_env(monkeypatch, tmp_path)
+    fake = FakeInstagram()  # token que nunca vence
+    monkeypatch.setattr("app.sources.base.make_client", lambda *a, **k: fake.client())
+    assert cli.main(["ig-token", "--token", "EAAB" + "x" * 150, "--username", "hrbioambiental"]) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert out["validade"] == "nunca"
+
+
+def test_cli_ig_token_recusa_token_que_vence_em_poucos_dias_sem_mostrar_o_token(tmp_path, monkeypatch, capsys):
+    import time
+
+    from app import cli
+    from tests.fake_instagram import FakeInstagram
+
+    _cli_env(monkeypatch, tmp_path)
+    fake = FakeInstagram()
+    fake.token_expires_at = int(time.time()) + 2 * 3600  # vence em 2 horas
+    monkeypatch.setattr("app.sources.base.make_client", lambda *a, **k: fake.client())
+    assert cli.main(["ig-token", "--token", "EAAB" + "x" * 150, "--username", "hrbioambiental"]) == 3
+    captured = capsys.readouterr()
+    assert "NÃO serve para a rotina" in captured.err and "PAGINA-TOKEN" not in captured.out + captured.err
+    assert captured.out == ""  # nada impresso: o token nao vaza
+
+
+def test_cli_ig_token_aceita_token_que_vence_em_meses(tmp_path, monkeypatch, capsys):
+    import time
+
+    from app import cli
+    from tests.fake_instagram import FakeInstagram
+
+    _cli_env(monkeypatch, tmp_path)
+    fake = FakeInstagram()
+    fake.token_expires_at = int(time.time()) + 60 * 86400
+    monkeypatch.setattr("app.sources.base.make_client", lambda *a, **k: fake.client())
+    assert cli.main(["ig-token", "--token", "EAAB" + "x" * 150, "--username", "hrbioambiental"]) == 0
+    assert "UTC" in capsys.readouterr().out

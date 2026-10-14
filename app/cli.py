@@ -149,9 +149,33 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Preciso de exatamente uma conta; achei: {names}. Use --username @da_hrbio.", file=sys.stderr)
             return 2
         a = accounts[0]
-        # Guarde estes dois valores como segredos do ambiente da rotina. Nao os envie a ninguem.
+        # Confere na Meta ate quando o token da Pagina vale: um token que vence em dias derruba a rotina.
+        try:
+            info = InstagramClient.facebook_token_info(a["page_token"], settings.facebook_app_id,
+                                                       settings.facebook_app_secret, http, version)
+            user_info = InstagramClient.facebook_token_info(long_token, settings.facebook_app_id,
+                                                            settings.facebook_app_secret, http, version)
+        except InstagramError as exc:
+            print(f"Não consegui conferir a validade do token: {exc}", file=sys.stderr)
+            return 2
+        from datetime import datetime, timezone
+
+        def quando(ts: int) -> str:
+            return "nunca" if not ts else datetime.fromtimestamp(ts, timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+
+        restante = None if not info["expira_em"] else info["expira_em"] - datetime.now(timezone.utc).timestamp()
+        if not info["valido"] or (restante is not None and restante < 7 * 86400):
+            print("O token da Página NÃO serve para a rotina: "
+                  + ("já é inválido." if not info["valido"] else f"vence em {quando(info['expira_em'])}.")
+                  + f" (token de usuário: vence em {quando(user_info['expira_em'])}; token da Página: tipo {info['tipo']}.) "
+                  "Nada foi copiado nem mostrado. Gere um token novo no Explorador e tente de novo; se repetir, avise quem cuida do sistema.",
+                  file=sys.stderr)
+            return 3
+        # Guarde estes valores como segredos do ambiente da rotina. Nao os envie a ninguem.
         print(json.dumps({"INSTAGRAM_USER_ID": a["ig_user_id"], "INSTAGRAM_TOKEN": a["page_token"],
-                          "INSTAGRAM_LOGIN": "facebook", "conta": f"@{a['username']}"}, ensure_ascii=False, indent=2))
+                          "INSTAGRAM_LOGIN": "facebook", "conta": f"@{a['username']}",
+                          "validade": quando(info["expira_em"]), "dados_ate": quando(info["dados_ate"])},
+                         ensure_ascii=False, indent=2))
         return 0
 
     if args.cmd == "create-user":

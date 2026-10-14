@@ -203,6 +203,14 @@ class InstagramClient:
                               "ig_user_id": str(ig["id"]), "username": ig.get("username", "")})
         return found
 
+    @staticmethod
+    def facebook_token_info(token: str, app_id: str, app_secret: str, http: httpx.Client, version: str = "v23.0") -> dict:
+        """Pergunta a Meta ate quando o token vale (debug_token). `expires_at` 0 = nunca vence."""
+        data = InstagramClient._facebook_get(
+            http, version, "debug_token", input_token=token, access_token=f"{app_id}|{app_secret}").get("data", {})
+        return {"valido": bool(data.get("is_valid")), "tipo": data.get("type", ""),
+                "expira_em": int(data.get("expires_at") or 0), "dados_ate": int(data.get("data_access_expires_at") or 0)}
+
     # ------------------------------------------------------------------- token
     @staticmethod
     def refresh_token(token: str, http: httpx.Client) -> tuple[str, int]:
