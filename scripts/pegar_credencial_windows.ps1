@@ -1,4 +1,5 @@
-﻿# Pega a credencial do Instagram (token da Pagina, que nao vence) para guardar como segredo na rotina do Claude.
+﻿param([switch]$DaAreaDeTransferencia)
+# Pega a credencial do Instagram (token da Pagina, que nao vence) para guardar como segredo na rotina do Claude.
 # O TOKEN NAO APARECE NA TELA: ele vai direto para a area de transferencia (Ctrl+V / colar), para voce nao precisar
 # ve-lo nem copia-lo. Nao o envie a ninguem; cole-o apenas no campo INSTAGRAM_TOKEN do ambiente da rotina.
 $ErrorActionPreference = "Stop"
@@ -10,8 +11,14 @@ if (-not (Test-Path $config)) { Write-Host "Falta o config_local.ps1. Rode antes
 if (-not $env:FACEBOOK_APP_ID -or -not $env:FACEBOOK_APP_SECRET) { Write-Host "Preencha FACEBOOK_APP_ID e FACEBOOK_APP_SECRET no config_local.ps1."; exit 1 }
 $py = Join-Path $raiz ".venv\Scripts\python.exe"
 if (-not (Test-Path $py)) { Write-Host "Rode antes o iniciar_windows.bat uma vez, para instalar as dependencias."; exit 1 }
-Write-Host "No Explorador da Graph API (app HRBio Radar), gere um token novo, copie e cole abaixo."
-$saida = & $py -m app.cli ig-token --username hrbioambiental
+if ($DaAreaDeTransferencia) {
+    # Modo automatico: o token do Explorador ja foi copiado (Ctrl+C); le dali sem mostrar na tela.
+    $tok = (Get-Clipboard -Raw)
+    $saida = & $py -m app.cli ig-token --username hrbioambiental --token $tok
+} else {
+    Write-Host "No Explorador da Graph API (app HRBio Radar), gere um token novo, copie e cole abaixo."
+    $saida = & $py -m app.cli ig-token --username hrbioambiental
+}
 if ($LASTEXITCODE -ne 0) { exit 1 }
 $j = ($saida -join "`n") | ConvertFrom-Json
 Write-Host ""
