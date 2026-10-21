@@ -44,6 +44,11 @@ def test_texto_gigante_vira_reticencias_e_palavra_gigante_nao_trava():
     assert b.height <= 300
 
 
+def test_palavra_longa_encolhe_a_fonte_em_vez_de_vazar_da_caixa():
+    b = fit_block("CONDICIONANTES DA LICENÇA", "ExtraBold", 820, 360, 120, 60)
+    assert all(b.fnt.getlength(line) <= 820 for line in b.lines)
+
+
 def test_kicker_longo_e_truncado_dentro_da_largura():
     text, fnt, tracking = fit_kicker("SÚMULA DO TERMO DE COOPERAÇÃO MATA ATLÂNTICA - SEMA/FEPAM - MUNICÍPIO DE PICADA CAFÉ", 800)
     assert spaced_width(text, fnt, tracking) <= 800

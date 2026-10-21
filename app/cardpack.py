@@ -16,7 +16,8 @@ class CardError(ValueError):
     pass
 
 
-def build_pack(item: Item, content_json: str, out_dir: str | Path, assets: BrandAssets) -> dict:
+def build_pack(item: Item, content_json: str, out_dir: str | Path, assets: BrandAssets, *,
+               cover_kicker: str = "Novidade na legislação ambiental") -> dict:
     try:
         content = DraftContent.model_validate_json(content_json)
     except ValidationError as exc:
@@ -35,6 +36,7 @@ def build_pack(item: Item, content_json: str, out_dir: str | Path, assets: Brand
         logo_light_bg=assets.load_logo("claro"),
         seed=item.id,
         invite_story=True,
+        cover_kicker=cover_kicker,
     )
     files = []
     for name, img in images.items():

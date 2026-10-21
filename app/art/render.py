@@ -70,7 +70,7 @@ def fit_block(text: str, weight: str, max_w: int, max_h: int, start: int, minimu
         fnt = font(weight, size)
         lines = wrap(text, fnt, max_w)
         line_h = int(size * spacing)
-        if len(lines) * line_h <= max_h:
+        if len(lines) * line_h <= max_h and all(fnt.getlength(ln) <= max_w for ln in lines):  # palavra longa nao pode vazar
             return Block(lines, fnt, line_h)
         if size <= minimum:
             break
@@ -385,6 +385,7 @@ def render_set(
     logo_light_bg: Image.Image | None = None,
     seed: int = 0,
     invite_story: bool = False,
+    cover_kicker: str = "Novidade na legislação ambiental",
 ) -> dict[str, Image.Image]:
     """Todas as artes de um rascunho: slide_01.. (carrossel) e story.
 
@@ -393,10 +394,10 @@ def render_set(
     logos = (logo_dark_bg, logo_light_bg)
     post_bg = make_background(POST_SIZE, photo, seed)
     for i, (title, body) in enumerate(slides):
-        kicker = "Novidade na legislação ambiental" if i == 0 else norm_label
+        kicker = cover_kicker if i == 0 else norm_label
         out[f"slide_{i + 1:02d}"] = render_post_slide(title, body, kicker, i, len(slides), post_bg, logos)
     story_bg = make_background(STORY_SIZE, photo, seed + 1)
-    out["story"] = render_story(headline, status_text, "Novidade na legislação ambiental",
+    out["story"] = render_story(headline, status_text, cover_kicker,
                                 f"Fale com a HRBio\n{norm_label}", story_bg, logos)
     if invite_story:
         invite_bg = make_background(STORY_SIZE, photo, seed + 2)
