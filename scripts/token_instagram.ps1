@@ -54,6 +54,7 @@ try {
     Write-Host "INSTAGRAM_LOGIN:    facebook"
     if ($dbg.expires_at -eq 0) { Write-Host "Validade do token:  NUNCA VENCE" -ForegroundColor Green } else { Write-Host "Validade do token:  atencao, tem vencimento (expires_at=$($dbg.expires_at))" -ForegroundColor Yellow }
     Write-Host ""
+    Write-Host "O token (de PAGINA) termina em:  ...$($tokenPagina.Substring($tokenPagina.Length - 6))   <- use para conferir o que colou no ambiente"
     Write-Host "O TOKEN ja foi copiado para a area de transferencia (nao aparece aqui)."
     Write-Host "Agora va nas configuracoes do ambiente (Claude), no campo INSTAGRAM_TOKEN, apague o valor antigo e cole (Ctrl+V)."
     Write-Host "Confira tambem se INSTAGRAM_USER_ID e INSTAGRAM_LOGIN estao como acima. NAO cole o token em nenhum chat."
