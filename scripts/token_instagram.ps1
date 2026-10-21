@@ -2,10 +2,12 @@
 # Nao precisa de Python, config_local nem de nada instalado. O token NAO aparece na tela e nao e gravado em arquivo.
 $ErrorActionPreference = "Stop"
 $v = "v23.0"
-function Segredo($texto) {
-    $s = Read-Host $texto -AsSecureString
-    $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)
-    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
+function DaAreaDeTransferencia($instrucao) {
+    # Le o que voce copiou (Ctrl+C) sem precisar colar na janela. Nada e mostrado.
+    Read-Host $instrucao | Out-Null
+    $t = Get-Clipboard -Raw
+    if ($null -eq $t) { $t = "" }
+    return $t
 }
 function Limpa($t) { return (($t.ToCharArray() | Where-Object { -not [char]::IsWhiteSpace($_) -and -not [char]::IsControl($_) }) -join "").Trim([char]39, [char]34) }
 function MsgErro($e) {
@@ -15,11 +17,18 @@ function MsgErro($e) {
 }
 try {
     Write-Host ""
-    Write-Host "Vou pedir 3 coisas. Nada do que voce digitar aparece na tela nem e gravado."
+    Write-Host "Vou pedir 3 coisas. Os segredos NAO aparecem na tela nem sao gravados: voce so copia (Ctrl+C) e aperta Enter."
     Write-Host ""
     $appId = Limpa (Read-Host "1) ID do aplicativo (Meta > app HRBio Radar > Configuracoes do app > Basico)")
-    $appSecret = Limpa (Segredo "2) Chave secreta do aplicativo (mesma tela; aparece em branco ao colar, e normal) e Enter")
-    $curto = Limpa (Segredo "3) Token do Explorador da Graph API (copie la e cole aqui com o botao direito) e Enter")
+    Write-Host ""
+    Write-Host "2) Chave secreta do aplicativo: na tela da Meta (Configuracoes do app > Basico) clique em Mostrar e COPIE (Ctrl+C)."
+    $appSecret = Limpa (DaAreaDeTransferencia "   Ja copiou? Volte aqui e aperte Enter")
+    Write-Host "   Recebi $($appSecret.Length) caracteres (a chave costuma ter 32)."
+    Write-Host ""
+    Write-Host "3) Token do Explorador da Graph API: la, clique no icone de copiar ao lado do campo Token de acesso (comeca com EAA)."
+    $curto = Limpa (DaAreaDeTransferencia "   Ja copiou? Volte aqui e aperte Enter")
+    Write-Host "   Recebi $($curto.Length) caracteres (o token costuma ter mais de 150)."
+    if ($appSecret.Length -lt 20) { throw "A chave secreta nao foi copiada (recebi $($appSecret.Length) caracteres). Na Meta, clique em Mostrar e copie com Ctrl+C antes de apertar Enter." }
     if ($curto.Length -lt 100 -or -not $curto.StartsWith("EA")) { throw "O token do Explorador parece incompleto ($($curto.Length) caracteres). Ele tem mais de 150 e comeca com EAA. Copie de novo pelo icone de copiar." }
     Write-Host ""
     Write-Host "Falando com a Meta..."
